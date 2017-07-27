@@ -43,7 +43,7 @@ SWEEP was tested with python3.5 and Python3.6.
 
 ## Adapting TPF to SWEEP
 
-TPF server and client available at http://linkeddatafragments.org/software/ are used to test SWEEP. Some changes have to be done on the TPF server. If you want to measure precision and recall, some changes should be done on the client too.
+SWEEP uses the TPF server and client available at http://linkeddatafragments.org/software/. Some modifications have to be done on the TPF server. If you want to measure precision and recall, some changes should be done on the client too.
 
 ### TPF Server
 
@@ -212,7 +212,7 @@ if (datetime)
 
 ```
 
-Then, lfd-client command line allows to specify the SWEEP server (with '-s').
+Then, ldf-client command line allows to specify the SWEEP server (with '-s').
 Next, apply next modifications to ./lib/sparql/SparqlIterator.js :
 ```nodejs
 ...
