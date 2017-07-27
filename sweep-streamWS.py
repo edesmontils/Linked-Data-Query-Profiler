@@ -189,8 +189,8 @@ def sweep():
 
     # rep += '<hr size="2" width="100" align="CENTER" />'
 
-    rep += '<h1>Deduced BGPs</h1><p>('+str(ctx.nlast)+' more recents)</p><table cellspacing="1" border="1" cellpadding="5">\n'
-    rep += '<thead><td></td><td>ip</td><td>time</td><td>bgp</td><td>Original query</td><td>Precision</td><td>Recall</td>'
+    rep += '<h1>Deduced BGPs</h1><p>('+str(ctx.nlast)+' more recents)</p><table cellspacing="1" border="1" cellpadding="5"  width="100%">\n'
+    rep += '<thead><td></td><td>ip</td><td>time</td><td width="40%">bgp</td><td  width="40%">Original query</td><td>Precision</td><td>Recall</td>'
     # rep += '<td>Quality</td>'
     rep += '</thead>\n'
     # for (i,idQ, t,ip,query,bgp,precision,recall) in ctx.sweep.memory[-1*ctx.nlast:] :
@@ -213,7 +213,7 @@ def sweep():
                     rep += html.escape(toStr(s,p,o))+' . <br/>'
             else:
                 rep += 'No BGP assigned !'
-            rep += '</td><td>'+idQ+'<br/>'+html.escape(query)+'</td><td>%2.3f</td><td>%2.3f</td>'%(precision,recall)
+            rep += '</td><td>'+idQ+'<br/>'+html.escape(query)+'</td><td>%2.3f</td><td>%2.3f</td>'%(precision,recall)    # .replace('\n','<br/>')
             # rep += '<td>%2.3f</td>'%((precision+recall)/2)
             rep += '</tr>'
     rep += '</table>'
