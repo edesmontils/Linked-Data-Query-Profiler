@@ -13,7 +13,7 @@ http://sweep.priloo.univ-nantes.fr
 SWEEP TPF Client:
 http://tpf-client-sweep.priloo.univ-nantes.fr
 
-If you want to test SWEEP with another TPF client (e.g., http://client.linkeddatafragments.org/) you can give the address of our DBpedia's TPF server http://tpf-server-sweep.priloo.univ-nantes.fr. In that case, SWEEP will deduce BGPs but it is not able to calculate precision and recall.
+If you want to test SWEEP with another TPF client (e.g., http://client.linkeddatafragments.org/) you can give the address of our DBpedia's TPF server http://tpf-server-sweep.priloo.univ-nantes.fr/dbpedia. In that case, SWEEP will deduce BGPs but it is not able to calculate precision and recall.
 
 ## Installing SWEEP
 ### Prelude
