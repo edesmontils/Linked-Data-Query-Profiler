@@ -185,11 +185,11 @@ function toIRI(s,p) {return s[0]   !== '_' ? (!N3.Util.isLiteral(s) ? '<'+p+' ty
 module.exports = RdfView;
 
 ```
-These changes allow the TPF Server to send to SWEEP the execution log. These changes are enough to run SWEEP. If you want to measure precision and recall, in the next we describe the modificaitons to apply to the TPF client.
+These modifications allow the TPF Server to send to SWEEP the execution log. These modifications are enough to run SWEEP. If you want to measure precision and recall, in the next we describe the modificaitons to apply to the TPF client.
 
 ### TPF Client
 
-Let's take the ./bin/ldf-client file. After clonning the project (https://github.com/LinkedDataFragments/Client.js.git), do next changes :
+Let's take the ./bin/ldf-client file. After clonning the project (https://github.com/LinkedDataFragments/Client.js.git), do next modifications :
 ```nodejs
 // Parse and initialize configuration
 var configFile = args.c ? args.c : path.join(__dirname, '../config-default.json'),
@@ -211,8 +211,8 @@ if (datetime)
 
 ```
 
-Then, lfd-client command line allows ti specify the SWEEP server (with '-s').
-Next, do changes on ./lib/sparql/SparqlIterator.js :
+Then, lfd-client command line allows to specify the SWEEP server (with '-s').
+Next, apply next modifications to ./lib/sparql/SparqlIterator.js :
 ```nodejs
 ...
   // Transform the query into a cascade of iterators
@@ -240,7 +240,7 @@ Next, do changes on ./lib/sparql/SparqlIterator.js :
 ...
 ```
 
-This code sends the query to SWEEP. This permits to SWEEP to process precision and recall.
+This code sends the query to SWEEP. This allows SWEEP to alculate precision and recall.
 
 ## Running SWEEP
 
