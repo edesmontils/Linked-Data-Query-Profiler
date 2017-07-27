@@ -3,12 +3,17 @@ SWEEP: a Streaming Web Service to Deduce Basic Graph Patterns from Triple Patter
 SWEEP is a tool that allows data providers using a TPF server (see LDF @ linkeddatafragments.org/) to know the queries of their TPF clients, i.e., how their data are used.
 
 ## Testing SWEEP
+The SWEEP dashboard show the recent deduced BGPs evaluated by a DBpedia's TPF that we setup. 
+Il you want to send à SPARQL query to our DBpedia's TPF server you can use any TPF client or use our modified TPF client that allows SWEEP to measure precision and recall of deduced BGPs.
 
 SWEEP Dashboard:
 http://sweep.priloo.univ-nantes.fr 
 
 SWEEP TPF Client:
 http://tpf-client-sweep.priloo.univ-nantes.fr
+
+Our DBpedia's TPF server:
+http://tpf-server-sweep.priloo.univ-nantes.fr
 
 ## Installing SWEEP
 ### Prelude
