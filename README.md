@@ -249,7 +249,7 @@ From `~/SWEEP` run the comand to run SWEEP:
 ```bash
 nohup python3.5 sweep-streamWS.py -g 0.250 -to 0.2 -l 20 --port 5000 &> resSWEEP &
 ```
-The Dashboard is now available at : http:127.0.0.1:5000
+The Dashboard is now available at : http://127.0.0.1:5000
 
 For the (modified) TPF Server, change the config file to specify the SWEEP server and datasources :
 
@@ -281,7 +281,7 @@ Finally, the SWEEP client to test SWEEP can be run :
 ```bash
 nohup python3.5 qsim-WS.py --sweep http://127.0.0.1:5000 -s http://127.0.0.1:5001 -c /.../bin/ldf-client --port 5002 -v -g 0.25 &> resQsim-WS &
 ```
-The client is now available at : http:127.0.0.1:5002
+The client is now available at : http://127.0.0.1:5002
 
 #### Command lines
 
