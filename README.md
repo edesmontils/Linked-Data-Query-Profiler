@@ -38,15 +38,15 @@ You need to install dependencies with pip:
 - SPARQLWrapper :https://github.com/RDFLib/sparqlwrapper
 - iso8601 : https://bitbucket.org/micktwomey/pyiso8601
 
-SWEEP was tested withn python3.5 and Python3.6.
+SWEEP was tested with python3.5 and Python3.6.
 
 ## Adapting TPF to SWEEP
 
-TPF server and client on http://linkeddatafragments.org/software/ can be used to test SWEEP. But, some changes have to be done.
+TPF server and client available at http://linkeddatafragments.org/software/ are used to test SWEEP. Some changes have to be done on the TPF server. If you want to measure precision and recall, some changes should be done on the client too.
 
 ### TPF Server
 
-SWEEP need the TPF Server log to process. So, changes have to be done on TPF Server code. First, after clonning the project (https://github.com/LinkedDataFragments/Server.js.git) change concerns thne file ./bin/ldf-server. Just add the code (from 'Begin SWEEP' to 'End SWEEP') :
+SWEEP needs the TPF server log to deduce BGPs. So, some modifications should be done on TPF Server code. First, after clonning the project (https://github.com/LinkedDataFragments/Server.js.git) change concerns the file ./bin/ldf-server. Just add the code (from 'Begin SWEEP' to 'End SWEEP') :
 ```nodejs
 ...
 var configDefaults = JSON.parse(fs.readFileSync(path.join(__dirname, '../config/config-defaults.json'))),
@@ -185,7 +185,7 @@ function toIRI(s,p) {return s[0]   !== '_' ? (!N3.Util.isLiteral(s) ? '<'+p+' ty
 module.exports = RdfView;
 
 ```
-These changes allows the TPF Server to send to SWEEP the execution log. These changes are enough to run SWEEP. But, to evaluate SWEEP process, we have to change the TPF Cleint.
+These changes allow the TPF Server to send to SWEEP the execution log. These changes are enough to run SWEEP. If you want to measure precision and recall, in the next we describe the modificaitons to apply to the TPF client.
 
 ### TPF Client
 
