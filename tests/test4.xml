@@ -1,27 +1,6 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!DOCTYPE log SYSTEM "http://documents.ls2n.fr/be4dbp/log.dtd">
 <log ip="lift2@193.52.19.26">
-  <entry datetime="2017-05-18 12:00:00" logline="01" valid="TPF">
-    <request> <![CDATA[
-      PREFIX dbpedia-owl: <http://dbpedia.org/ontology/> 
-      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
-      SELECT ?movie ?title ?name WHERE {
-      ?movie dbpedia-owl:starring ?actor . 
-      ?actor rdfs:label "Brad Pitt"@en . 
-      ?movie rdfs:label ?title .
-      ?movie dbpedia-owl:director ?director . 
-      ?director rdfs:label ?name 
-      FILTER LANGMATCHES (LANG(?title), "EN") 
-      FILTER LANGMATCHES (LANG(?name), "EN") 
-      } ]]></request>
-    <bgp>
-      <tp><s type="var" val="actor"/><p type="iri" val="http://www.w3.org/2000/01/rdf-schema#label"/><o type="lit" language="en"><![CDATA[Brad Pitt]]></o></tp>
-      <tp><s type="var" val="movie"/><p type="iri" val="http://dbpedia.org/ontology/starring"/><o type="var" val="actor"/></tp>
-      <tp><s type="var" val="movie"/><p type="iri" val="http://dbpedia.org/ontology/director"/><o type="var" val="director"/></tp>
-      <tp><s type="var" val="movie"/><p type="iri" val="http://www.w3.org/2000/01/rdf-schema#label"/><o type="var" val="title"/></tp>
-      <tp><s type="var" val="director"/><p type="iri" val="http://www.w3.org/2000/01/rdf-schema#label"/><o type="var" val="name"/></tp>
-    </bgp>
-  </entry>
 
   <entry datetime="2017-05-18 12:00:10" logline="02" valid="TPF">
     <request><![CDATA[
@@ -301,7 +280,7 @@
   </entry>
 
 
-  <entry datetime="2017-05-18 12:02:40" logline="17" valid="TPF">
+  <entry datetime="2017-05-18 12:02:50" logline="17" valid="TPF">
     <request><![CDATA[
       PREFIX dbpedia-owl: <http://dbpedia.org/ontology/> 
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
@@ -329,7 +308,7 @@
   </entry>
 
 
-  <entry datetime="2017-05-18 12:02:50" logline="18" valid="EmptyTPF">
+  <entry datetime="2017-05-18 12:04:10" logline="18" valid="EmptyTPF">
     <request><![CDATA[
       PREFIX dbpedia-owl: <http://dbpedia.org/ontology/> 
       PREFIX dc: <http://purl.org/dc/terms/> 
@@ -351,7 +330,7 @@
   </entry>
 
 
-  <entry datetime="2017-05-18 12:03:00" logline="19" valid="TPF">
+  <entry datetime="2017-05-18 12:04:20" logline="19" valid="TPF">
     <request><![CDATA[
       CONSTRUCT WHERE { 
       ?s ?p ?o. 
@@ -362,7 +341,7 @@
   </entry>
 
 
-  <entry datetime="2017-05-18 12:03:10" logline="20" valid="TPF">
+  <entry datetime="2017-05-18 12:04:30" logline="20" valid="TPF">
     <request><![CDATA[
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
       PREFIX dc: <http://purl.org/dc/terms/> 
@@ -384,7 +363,7 @@
   </entry>
 
 
-  <entry datetime="2017-05-18 12:03:20" logline="21" valid="TPF">
+  <entry datetime="2017-05-18 12:04:40" logline="21" valid="TPF">
     <request><![CDATA[
       PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
       SELECT DISTINCT ?type ?label WHERE { 
@@ -399,7 +378,7 @@
   </entry>
   
 
-  <entry datetime="2017-05-18 12:03:30" logline="22" valid="TPF">
+  <entry datetime="2017-05-18 12:04:50" logline="22" valid="TPF">
     <request><![CDATA[
     SELECT ?titleEng ?title WHERE {
     ?movie dbpprop:starring [ rdfs:label "Natalie Portman"@en ];
@@ -420,5 +399,28 @@
       <tp><s type="var" val="movie"/><p type="iri" val="http://dbpedia.org/property/starring"/><o type="var" val="BN1"/></tp>
     </bgp>
   </entry>
+ 
+  <entry datetime="2017-05-18 12:05:00" logline="01" valid="TPF">
+    <request> <![CDATA[
+      PREFIX dbpedia-owl: <http://dbpedia.org/ontology/> 
+      PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#> 
+      SELECT ?movie ?title ?name WHERE {
+      ?movie dbpedia-owl:starring ?actor . 
+      ?actor rdfs:label "Brad Pitt"@en . 
+      ?movie rdfs:label ?title .
+      ?movie dbpedia-owl:director ?director . 
+      ?director rdfs:label ?name 
+      FILTER LANGMATCHES (LANG(?title), "EN") 
+      FILTER LANGMATCHES (LANG(?name), "EN") 
+      } ]]></request>
+    <bgp>
+      <tp><s type="var" val="actor"/><p type="iri" val="http://www.w3.org/2000/01/rdf-schema#label"/><o type="lit" language="en"><![CDATA[Brad Pitt]]></o></tp>
+      <tp><s type="var" val="movie"/><p type="iri" val="http://dbpedia.org/ontology/starring"/><o type="var" val="actor"/></tp>
+      <tp><s type="var" val="movie"/><p type="iri" val="http://dbpedia.org/ontology/director"/><o type="var" val="director"/></tp>
+      <tp><s type="var" val="movie"/><p type="iri" val="http://www.w3.org/2000/01/rdf-schema#label"/><o type="var" val="title"/></tp>
+      <tp><s type="var" val="director"/><p type="iri" val="http://www.w3.org/2000/01/rdf-schema#label"/><o type="var" val="name"/></tp>
+    </bgp>
+  </entry>
   
+
 </log>
