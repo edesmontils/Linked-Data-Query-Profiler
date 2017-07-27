@@ -1,5 +1,6 @@
 # SWEEP Project
 SWEEP: a Streaming Web Service to Deduce Basic Graph Patterns from Triple Pattern Fragments.
+
 SWEEP is a tool that allows data providers using a TPF server (see LDF @ linkeddatafragments.org/) to know the queries of their TPF clients, i.e., how their data are used.
 
 ## Testing SWEEP
