@@ -73,7 +73,7 @@ app.secret_key = '\x0ctD\xe3g\xe1XNJ\x86\x02\x03`O\x98\x84\xfd,e/5\x8b\xd1\x11'
 @app.route('/')
 # @login_required
 def index():
-    return render_template('index-sweep.html',nom_appli="SWEEP Dashboard", version="0.1")
+    return render_template('index-sweep.html',nom_appli="SWEEP Dashboard", version="0.2")
 
 @app.route('/bestof')
 def bo():
