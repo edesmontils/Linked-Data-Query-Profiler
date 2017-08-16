@@ -17,15 +17,6 @@ window.onbeforeunload = function (evt) {
     return message;
 }
 
-var dflt = {
-  min: 0,
-  max: 2,
-  donut: true,
-  gaugeWidthScale: 0.6,
-  counter: true,
-  hideInnerShadow: true
-} ;
-
 monitor = new Ajax.PeriodicalUpdater('get','/sweep', {
     method: 'get',
     frequency: 1,
@@ -90,16 +81,26 @@ function init() {
     gg1 = new JustGage({
       id: 'gaugeBGP',
       title: 'Building BGP',
+      min: 0,
+      max: 50,
       value: 0,
-      defaults: dflt
-    });
+      donut: true,
+      gaugeWidthScale: 0.6,
+      counter: true,
+      hideInnerShadow: true
+      });
 
     gg2 = new JustGage({
       id: 'gaugeREQ',
       title: 'Queries treated',
       value: 0,
-      defaults: dflt
-    });
+      min: 0,
+      max: 10,
+      donut: true,
+      gaugeWidthScale: 0.6,
+      counter: true,
+      hideInnerShadow: true
+      });
 
     gPRE = new JustGage({
         id: 'gaugePRE',
