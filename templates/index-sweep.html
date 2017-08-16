@@ -23,8 +23,11 @@ Released for free under a Creative Commons Attribution 2.5 License
   <!-- Attention, ordre important ! -->
   <script src="{{url_for('static',filename='./js/prototype.js')}}" type="text/javascript"></script>
   <script src="{{url_for('static',filename='./js/scriptaculous/scriptaculous.js')}}" type="text/javascript"></script>
-  <script src="{{url_for('static',filename='./js/base-sweep.js')}}" type="text/javascript"></script>
+  <script src="{{url_for('static',filename='./js/justgage-1.2.2/raphael-2.1.4.min.js')}}"></script>
+  <script src="{{url_for('static',filename='./js/justgage-1.2.2/justgage.js')}}"></script>
  
+  <script src="{{url_for('static',filename='./js/base-sweep.js')}}" type="text/javascript"></script>
+
 </head>
 
 <body onload="init()" onunload="end()" onreload="end()">
@@ -32,6 +35,12 @@ Released for free under a Creative Commons Attribution 2.5 License
 <div id="header">
 	<h1>{{nom_appli}}</h1>
 	<p>Version {{version}}</p>
+  	<div class="container">
+    	<div id="gaugeBGP" class="gauge"></div>
+    	<div id="gaugeREQ" class="gauge"></div>
+    	<div id="gaugePRE" class="gauge"></div>
+    	<div id="gaugeREC" class="gauge"></div>
+    </div>
 </div>
 
 <div id="content">
@@ -39,9 +48,13 @@ Released for free under a Creative Commons Attribution 2.5 License
 	<!-- ================================== -->
 	<!-- =============== Posts ============ --> 
 	<!-- ================================== -->
-	<div id="posts">
-	</div>
-	
+
+ 	<div id="posts"></div>
+
+	<div id="dashboard"></div>
+
+	<div id="frequent"></div>
+
 	<!-- ============================================ -->
 	<!-- =============== Menus de gauche ============ --> 
 	<!-- ============================================ -->

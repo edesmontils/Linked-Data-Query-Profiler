@@ -386,7 +386,7 @@ def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
                 out_queue.put(bgp)
                 val_queue.put((SWEEP_IN_BGP,-1,bgp))
             BGP_list = recent
-
+            ctx.nbBGP.value = len(BGP_list)
             entry = in_queue.get()
     except KeyboardInterrupt:
         # penser à purger les derniers BGP ou uniquement autoutr du get pour gérer fin de session
@@ -396,6 +396,7 @@ def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
             out_queue.put(bgp)
             val_queue.put((SWEEP_IN_BGP,-1,bgp))
         BGP_list.clear()
+        ctx.nbBGP.value = 0
     out_queue.put(None)
 
 #==================================================
@@ -547,7 +548,7 @@ def processValidation(in_queue, ctx):
                 if SWEEP_DEBUB_PR: 
                     print('--- --- @'+ip+' --- ---')
                     print(' ')
-
+            ctx.nbREQ.value = len(queryList)
             inq = in_queue.get()
     except KeyboardInterrupt:
         # penser à afficher les dernières queries ou uniquement autour du get pour fin de session
@@ -578,6 +579,7 @@ def processValidation(in_queue, ctx):
             if SWEEP_DEBUB_PR: 
                 print('--- --- @'+ip+' --- ---')
                 print(' ')
+        ctx.nbREQ.value = 0
 
 #==================================================
 
@@ -656,6 +658,10 @@ class SWEEP: # Abstract Class
         # self.avgRecall = mp.Value('f',0.0)
         # self.avgQual = mp.Value('f',0.0)
         # self.Acuteness = mp.Value('f',0.0)
+
+        self.nbBGP = mp.Value('i',0)
+        self.nbREQ = mp.Value('i',0)
+
         self.qId = mp.Value('i',0)
         self.stat = manager.dict({'sumRecall':0, 'sumPrecision':0, 'sumQuality':0, 'nbQueries':0, 'nbBGP':0, 'sumSelectedBGP':0})
 

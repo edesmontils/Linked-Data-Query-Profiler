@@ -17,14 +17,56 @@ window.onbeforeunload = function (evt) {
     return message;
 }
 
-monitor = new Ajax.PeriodicalUpdater('posts','/sweep', {
-      method: 'get',
-      frequency: 1,
-      decay: 1.1,
-      onFailure: function() {'<p>SWEEP HS</p>' }
+var dflt = {
+  min: 0,
+  max: 2,
+  donut: true,
+  gaugeWidthScale: 0.6,
+  counter: true,
+  hideInnerShadow: true
+} ;
+
+monitor = new Ajax.PeriodicalUpdater('get','/sweep', {
+    method: 'get',
+    frequency: 1,
+    decay: 1.1,
+    onSuccess: function (trs) {
+            bo = trs.responseText
+            $('dashboard').update(bo);
+    },
+    onFailure: function() {'<p>SWEEP HS</p>' }
     });
 monitor.stop();
 
+monitor2 = new Ajax.PeriodicalUpdater('get','/run', {
+    method: 'get',
+    frequency: 1,
+    onSuccess: function (trs) {
+            liste = JSON.parse(trs.responseText).result;
+            nbBGP = liste[0];
+            nbREQ = liste[1];
+            //alert(nbBGP);
+            // gg1.max = math.max(gg1.max,nbBGP)
+            // gg2.max = math.max(gg2.max,nbBGP)
+            gg1.refresh(nbBGP,Math.max(gg1.config.max,nbBGP));
+            gg2.refresh(nbREQ,Math.max(gg2.config.max,nbREQ));
+    },
+    onFailure: function() {'<p>SWEEP HS</p>' }
+    });
+
+monitor3 = new Ajax.PeriodicalUpdater('get','/pr', {
+    method: 'get',
+    frequency: 1,
+    onSuccess: function (trs) {
+            liste = JSON.parse(trs.responseText).result;
+            pre = Math.round(liste[0]*100);
+            rec = Math.round(liste[1]*100);
+            //alert(nbBGP);
+            gPRE.refresh(pre);
+            gREC.refresh(rec);
+    },
+    onFailure: function() {'<p>SWEEP HS</p>' }
+    });
 //=======================================================
 // Fonctions de gestion de l'interface et des appels AJAX
 //=======================================================
@@ -38,29 +80,85 @@ function clear() {
 
 	// Page effacée
     $('posts').update("");
+    $('dashboard').update("");
+    $('frequent').update("");
 }
 
 function init() {
     clear();
+
+    gg1 = new JustGage({
+      id: 'gaugeBGP',
+      title: 'Building BGP',
+      value: 0,
+      defaults: dflt
+    });
+
+    gg2 = new JustGage({
+      id: 'gaugeREQ',
+      title: 'Queries treated',
+      value: 0,
+      defaults: dflt
+    });
+
+    gPRE = new JustGage({
+        id: 'gaugePRE',
+        value: 0,
+        min: 0,
+        max: 100,
+        title: 'Avg Precision',
+        gaugeWidthScale: 0.6,
+        levelColors: [
+                        "#cd0000",
+                        "#0066cc",
+                        "#006400"
+                      ] ,
+        symbol: '%',
+        pointer: true,
+        counter: true,
+        humanFriendly: true      });
+
+    gREC = new JustGage({
+        id: 'gaugeREC',
+        value: 0,
+        min: 0,
+        max: 100,
+        title: 'Avg Recall',
+        gaugeWidthScale: 0.6,
+        levelColors: [
+                        "#cd0000",
+                        "#0066cc",
+                        "#006400"
+                      ] ,
+        counter: true,
+        symbol: '%',
+        pointer: true,
+        humanFriendly: true      });
+
     monitoring();
 }
 
 function end() {}
 
 function monitoring() {
+    $('frequent').hide()
+    $('posts').hide()
+    $('dashboard').appear();
     monitor.start()
 }
 
 function bestof() {
     monitor.stop()
-    $('posts').update('<p>Best Of is computing. Please waiting.</p>');
+    $('dashboard').hide()
+    $('posts').hide()
+    $('frequent').update('<p>Best Of is computing. Please waiting.</p>');
     new Ajax.Request('/bestof', {
         method: 'get',
         onSuccess: function (trs) {
             bo = trs.responseText
-            $('posts').hide();
-            $('posts').update(bo);
-            $('posts').appear();
+            $('frequent').hide();
+            $('frequent').update(bo);
+            $('frequent').appear();
         },
         onFailure: function () {
             alert('apropos: Unable to produce freuent BGPs and queries !')
@@ -70,6 +168,8 @@ function bestof() {
 
 function aides() {
     monitor.stop()
+    $('dashboard').hide();
+    $('frequent').hide();
     if (messages_aides == null) {
         messages_aides = '<div class="post"><h2 class="title">Help</h2><div class="story">';
         messages_aides = messages_aides
@@ -79,6 +179,8 @@ function aides() {
                 +'<p><img src="./static/images/shield_64.png" width="32" alt="base de données"/> : legal mentions.</p>'
                 ;
         messages_aides = messages_aides+ '</div></div>';
+        $('posts').update(messages_aides);
+        $('posts').appear();        
     } else {
         $('posts').hide();
         $('posts').update(messages_aides);
@@ -88,6 +190,8 @@ function aides() {
 
 function mentions() {
     monitor.stop();
+    $('dashboard').hide();
+    $('frequent').hide();
     if (messages_mentions == null) {
         new Ajax.Request('/mentions', {
             method: 'get',

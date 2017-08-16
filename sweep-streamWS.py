@@ -111,6 +111,24 @@ def bo():
 
     return rep #'<p>Not implemented</p>'
 
+@app.route('/pr')
+def doPR():
+    nb = ctx.sweep.stat['nbQueries']
+    nbbgp = ctx.sweep.stat['nbBGP']
+    if nb>0:
+        avgPrecision = ctx.sweep.stat['sumPrecision']/nb
+        avgRecall = ctx.sweep.stat['sumRecall']/nb
+        avgQual = ctx.sweep.stat['sumQuality']/nb
+    else:
+        avgPrecision = 0
+        avgRecall = 0
+        avgQual = 0
+    if nbbgp>0 :                
+        Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
+    else:
+        Acuteness = 0
+
+    return jsonify(result=(avgPrecision,avgRecall))
 
 @app.route('/sweep')
 def sweep():
@@ -171,16 +189,16 @@ def sweep():
     rep += '</tr></table>'
     rep += '</td><td>'
 
-    rep += '<table cellspacing="1" border="1" cellpadding="2"><thead>'
-    rep += '<td>Avg Precision</td>'
-    rep += '<td>Avg Recall</td>'
-    # rep += '<td>Avg Quality</td>'
-    # rep += '<td>Acuteness</td>'
-    rep += '</thead><tr>'
+    # rep += '<table cellspacing="1" border="1" cellpadding="2"><thead>'
+    # rep += '<td>Avg Precision</td>'
+    # rep += '<td>Avg Recall</td>'
+    # # rep += '<td>Avg Quality</td>'
+    # # rep += '<td>Acuteness</td>'
+    # rep += '</thead><tr>'
 
-    rep += '<td>%2.3f</td><td>%2.3f</td>'%(avgPrecision,avgRecall)
-    # rep += '<td>%2.3f</td><td>%2.3f</td>'%(avgQual,Acuteness)
-    rep += '</tr></table>'
+    # rep += '<td>%2.3f</td><td>%2.3f</td>'%(avgPrecision,avgRecall)
+    # # rep += '<td>%2.3f</td><td>%2.3f</td>'%(avgQual,Acuteness)
+    # rep += '</tr></table>'
 
     rep += '</td></tr></table>\n'
 
@@ -231,6 +249,12 @@ def sweep():
 #     else:
 #         print('"delquery" not implemented for HTTP GET')
 #         return jsonify(result=False)
+
+@app.route('/run', methods=['get'])
+def doRun():
+    nbgp = ctx.sweep.nbBGP.value
+    nreq = ctx.sweep.nbREQ.value
+    return jsonify(result=(nbgp,nreq))
 
 @app.route('/inform', methods=['post','get'])
 def processInform():
