@@ -434,6 +434,7 @@ def mentions():
         <p>Icons from <a href="http://www.iconspedia.com/">http://www.iconspedia.com/</a> in the set "<a href="http://www.iconspedia.com/pack/basic-set-2061/">Basic set</a>" of PixelMixer (<a href="http://pixel-mixer.com/">http://pixel-mixer.com/</a>) under license CC-by-sa.<br/>
         <!--img src="http://www.iconspedia.com/common/images/logo.jpg" width="100" alt="CC-by-sa"/--></p>
         <p>Effects and JavaScript frameworks <a href="http://www.prototypejs.org">prototypejs.org<!--img src="http://www.prototypejs.org/images/logo-home.gif" alt="prototypejs.org" /--></a> et <a href="http://www.script.aculo.us">script.aculo.us<!--img src="http://www.script.aculo.us/scriptaculous_logo.png" width="300" alt="script.aculo.us"/--></a>.</p>
+        <p>SWEEP uses <a href="http://justgage.com/">JustGage</a> (under <a href="http://opensource.org/licenses/mit-license.php">MIT License</a>), a JavaScript plugin for generating and animating gauges.</p>
         <p>(c) E. Desmontils &amp; P. Serrano-Alvarado, University of Nantes, France, 2017</p>
     """
     return s
