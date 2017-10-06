@@ -92,7 +92,7 @@ function init() {
 
     gg2 = new JustGage({
       id: 'gaugeREQ',
-      title: 'Current queries to find',
+      title: 'Current queries\nto find',
       value: 0,
       min: 0,
       max: 10,
