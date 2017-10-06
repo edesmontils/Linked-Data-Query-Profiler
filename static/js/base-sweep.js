@@ -80,7 +80,7 @@ function init() {
 
     gg1 = new JustGage({
       id: 'gaugeBGP',
-      title: 'Current BGPs\nunder construction',
+      title: 'Current BGPs \n under construction',
       min: 0,
       max: 50,
       value: 0,
@@ -92,7 +92,7 @@ function init() {
 
     gg2 = new JustGage({
       id: 'gaugeREQ',
-      title: 'Current queries\nto find',
+      title: 'Current queries \n to find',
       value: 0,
       min: 0,
       max: 10,
