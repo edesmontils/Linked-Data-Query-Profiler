@@ -241,7 +241,8 @@ def treat(query,bgp_list,ip,datasource):
         print('(%d)'%nbe,'query:',mess)
         print(bgp_list)
 
-        s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': '<l>'+bgp_list+'</l>'})
+        #s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': '<l>'+bgp_list+'</l>'})
+        
         # print('res:',s.json()['result'])
         # res=  ctx.listeSP[datasource].query(query) # ctx.tpfc.query(query)
         # pprint(res)
@@ -324,6 +325,7 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--valid", default='', dest="valid", action="store_true", help="Do precision/recall")
     parser.add_argument("-g", "--gap", type=float, default=60, dest="gap", help="Gap in minutes (60 by default)")
     parser.add_argument("-to", "--timeout", type=float, default=None, dest="timeout",help="TPF Client Time Out in minutes (no timeout by default).")
+    parser.add_argument("--host", default="127.0.0.1", dest="host", help="host ('127.0.0.1' by default)")
     parser.add_argument("--port", type=int, default=5002, dest="port", help="Port (5002 by default)")
 
     args = parser.parse_args()
@@ -344,7 +346,7 @@ if __name__ == '__main__':
         ref = l.find('référence')
         if ref.text is None: ref.text=''
         print('Configure ',l.get('nom'), ' in ',args.tpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service = args.tpfServer, dataset= f.get('nom') )#, clientParams= '-s '+args.host+':'+str(args.port) )
+        sp = TPFEP(service = args.tpfServer, dataset= f.get('nom'), clientParams= '-s '+args.sweep )
         sp.setEngine(args.tpfClient )
         ctx.listeBases[l.get('nom')] = {'fichier':f.get('nom'),'prefixe':f.get('prefixe'),'référence':ref.text,
                                         'description':etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
@@ -358,8 +360,9 @@ if __name__ == '__main__':
     if args.valid:
         ctx.doPR = True
     try:
+        print('Running qsim-WS on ' , args.host+":"+str(args.port))
         app.run(
-            host="0.0.0.0",
+            host=args.host,
             port=int(args.port),
             debug=True
         )

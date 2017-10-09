@@ -259,7 +259,9 @@ def doRun():
 @app.route('/inform', methods=['post','get'])
 def processInform():
     if request.method == 'POST':
+
         ip = request.remote_addr
+        
         errtype = request.form['errtype']
         queryNb = request.form['no']
         if errtype == 'QBF':
@@ -304,7 +306,7 @@ def processInform():
 def processQuery():
     if request.method == 'POST':
         ip = request.remote_addr
-        # print(ip)
+        print(request.headers)
         data = request.form['data']
 
         # print('Receiving request:',data)
@@ -314,6 +316,8 @@ def processQuery():
 
             if ctx.chglientMode :
                 client = q.get('client') # !!!!!!!!!!!!!!!!!!!!!!!!!
+            elif 'x-forwarded-for' in request.headers:
+                client = request.headers['x-forwarded-for']
             else:
                 client = None
 
@@ -374,7 +378,7 @@ def processData():
         ip = request.remote_addr
         ip2 = request.form['ip']
 
-        client = None # request.form['ip']
+        client = ip2 # request.form['ip']
         if client is None:
             client = ip
         elif client in ["undefined","", "undefine"]:
