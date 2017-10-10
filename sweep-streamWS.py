@@ -327,6 +327,8 @@ def processQuery():
                 q.set('client',str(ip) )
             elif "::ffff:" in client:
                 q.set('client', client[7:])
+            else : q.set('client',client)
+            
             print('QUERY - ip-remote:',ip,' client:',client, ' choix:',q.get('client'))
             ip = q.get('client')
 
@@ -469,7 +471,7 @@ if __name__ == '__main__':
     parser.add_argument("-o","--optimistic", help="BGP time is the last TP added (False by default)",
                     action="store_true",dest="doOptimistic")
     parser.add_argument("-l", "--last", type=int, default=10, dest="nlast", help="Number of last BGPs to view (10 by default)")
-    parser.add_argument("--port", type=int, default=5002, dest="port", help="Port (5002 by default)")
+    parser.add_argument("--port", type=int, default=5000, dest="port", help="Port (5000 by default)")
     parser.add_argument("--chglientMode", dest="chglientMode", action="store_true", help="Do TPF Client mode")
 
     args = parser.parse_args()
