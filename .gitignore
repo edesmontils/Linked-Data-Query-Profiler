@@ -7,3 +7,5 @@ lib/__pycache__/*
 tools/__pycache__/*
 
 *.csv
+
+.spyproject/*

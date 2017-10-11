@@ -11,9 +11,10 @@ Class to process statistics in a parallel context
 
 import multiprocessing as mp
 from queue import Empty
-import time
-from tools.Counter import *
-import csv
+
+from tools.Counter import saveCounterDict2CSV, Counter
+from tools.tools import now, date2str
+
 #==================================================
 #==================================================
 #==================================================

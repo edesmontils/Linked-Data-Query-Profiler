@@ -11,11 +11,13 @@ Application ...
 
 import datetime as dt
 import argparse
-from tools.Endpoint import *
-from tools.tools import  *
-from lib.QueryManager import *
+from tools.Endpoint import TPFEP,TPFClientError, TimeOut, QueryBadFormed, EndpointException
+from tools.tools import  now, date2str
 
-from flask import Flask, render_template, request, jsonify, session,url_for
+from lib.QueryManager import  QueryManager
+from lib.bgp import serializeBGP2str
+
+from flask import Flask, render_template, request, jsonify
 # http://flask.pocoo.org/docs/0.12/
 # from flask_cas import CAS, login_required
 
@@ -107,8 +109,8 @@ def ex(datasource):
         return jsonify(result = d)
     #---
     dtd = etree.DTD('http://documents.ls2n.fr/be4dbp/log.dtd')
-    assert dtd.validate(tree), '%s non valide au chargement : %s' % (
-        file, dtd.error_log.filter_from_errors()[0])
+    assert dtd.validate(tree), 'non valide au chargement : %s' % (
+        dtd.error_log.filter_from_errors()[0])
     #---
     # print('DTD valide !')
 

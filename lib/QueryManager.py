@@ -11,14 +11,14 @@ Basic query tools
 
 import re
 
-import multiprocessing as mp
-
+import rdflib
 from rdflib.plugins.sparql.sparql import SPARQLError
 from rdflib.plugins.sparql.algebra import translateQuery
 from rdflib.plugins.sparql.parser import parseQuery
 
-from lib.bgp import *
-from tools.Stat import *
+from lib.bgp import getBGP,valid,serializeBGP2str
+
+from tools.Stat import Stat, Counter
 
 #==================================================
 
@@ -65,9 +65,9 @@ class QueryManager:
     self.allowedQueryTypes = self.requestQueryTypes + self.modificationQueryTypes
 
     if modeStat: 
-      self.typeStat = Stat(Counter, list(self.requestQueryTypes + ['Others', 'None']) )
+      self.typeStat = Stat(Counter, list(self.requestQueryTypes + ['Others', 'None']))
       self.maxTP = 30
-      self.bgpStat = Stat(Counter, [str(i) for i in range(self.maxTP+1)]+['more'] )
+      self.bgpStat = Stat(Counter, [str(i) for i in range(self.maxTP+1)]+['more'])
     self.modeStat = modeStat
 
     if defaultPrefixes == None:
@@ -86,20 +86,20 @@ class QueryManager:
       self.defaultPrefixes['ex']='http://www.example.org/'
       self.defaultPrefixes['geo']='http://www.w3.org/2003/01/geo/wgs84_pos#'
 
-      self.defaultPrefixes['hydra']='http://www.w3.org/ns/hydra/core#'
-      self.defaultPrefixes['dc']='http://purl.org/dc/terms/'
-      self.defaultPrefixes['dc11']='http://purl.org/dc/elements/1.1/'
-      self.defaultPrefixes['dctitle']='http://purl.org/dc/terms/title/'
-      self.defaultPrefixes['vann']='http://purl.org/vocab/vann/'
-      self.defaultPrefixes['void']='http://rdfs.org/ns/void#'
-      self.defaultPrefixes['schema']='http://schema.org/sameAs/'
-      self.defaultPrefixes['dbpedia']='http://dbpedia.org/resource/'
-      self.defaultPrefixes['dbpedia-owl']='http://dbpedia.org/ontology/'
-      self.defaultPrefixes['dbpprop']='http://dbpedia.org/property/'
-      self.defaultPrefixes['dbpclass']='http://dbpedia.org/class/yago/'
-      self.defaultPrefixes['dbpedia-cat']='http://dbpedia.org/resource/Category/'
-      self.defaultPrefixes['ugent']='http://lib.ugent.be/classification/classification/'
-      self.defaultPrefixes['ugent-biblio']='http://data.linkeddatafragments.org/.well-known/genid/ugent-biblio/'
+      self.defaultPrefixes['hydra'] = 'http://www.w3.org/ns/hydra/core#'
+      self.defaultPrefixes['dc'] = 'http://purl.org/dc/terms/'
+      self.defaultPrefixes['dc11'] = 'http://purl.org/dc/elements/1.1/'
+      self.defaultPrefixes['dctitle'] = 'http://purl.org/dc/terms/title/'
+      self.defaultPrefixes['vann'] = 'http://purl.org/vocab/vann/'
+      self.defaultPrefixes['void'] = 'http://rdfs.org/ns/void#'
+      self.defaultPrefixes['schema'] = 'http://schema.org/sameAs/'
+      self.defaultPrefixes['dbpedia'] = 'http://dbpedia.org/resource/'
+      self.defaultPrefixes['dbpedia-owl'] = 'http://dbpedia.org/ontology/'
+      self.defaultPrefixes['dbpprop'] = 'http://dbpedia.org/property/'
+      self.defaultPrefixes['dbpclass'] = 'http://dbpedia.org/class/yago/'
+      self.defaultPrefixes['dbpedia-cat'] = 'http://dbpedia.org/resource/Category/'
+      self.defaultPrefixes['ugent'] = 'http://lib.ugent.be/classification/classification/'
+      self.defaultPrefixes['ugent-biblio'] = 'http://data.linkeddatafragments.org/.well-known/genid/ugent-biblio/'
     else:
       self.defaultPrefixes = defaultPrefixes
 
@@ -190,14 +190,14 @@ class QueryManager:
         try:
           BGPSet = getBGP(q)
           if valid(BGPSet):
+            l = len(BGPSet)
             if self.modeStat: 
-              l = len(BGPSet)
               if l>self.maxTP:
                 self.bgpStat.stdput('more') 
               else:
                 self.bgpStat.stdput(str(l))
-            else:
-              if len(BGPSet) ==0: parse('',q)
+#            else:
+#              if l==0: parse('',q)
             return (BGPSet, query)
           else:
             raise BGPUnvalidException('BGP Not Valid')

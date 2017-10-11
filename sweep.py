@@ -11,19 +11,19 @@ Application ...
 
 from queue import Empty
 import multiprocessing as mp
-from ctypes import c_double
 
-import iso8601 # https://pypi.python.org/pypi/iso8601/     http://pyiso8601.readthedocs.io/en/latest/
 import datetime as dt
-import csv
-from tools.tools import *
-from tools.Stat import *
+import time
 
-from lib.QueryManager import *
+import csv
+from tools.tools import now
+
+from rdflib import Variable
 
 from lxml import etree  # http://lxml.de/index.html#documentation
-from lib.bgp import *
+from lib.bgp import serialize2string, egal, calcPrecisionRecall, canonicalize_sparql_bgp, serializeBGP
 
+from collections import OrderedDict
 
 #==================================================
 
@@ -604,7 +604,7 @@ def addBGP(n,bgp, node_log):
         query += ' }'
         request_node.text = query
     except Exception as e:
-        logging.error('(%s) PB serialize BGP : %s\n%s\n%s', host, e.__str__(), nquery, bgp)
+        print('PB serialize BGP : %s\n%s\n%s', e.__str__(), query, bgp)
     return node_log
 
 def save(node_log, lift2):
@@ -622,12 +622,12 @@ def save(node_log, lift2):
         except Exception as e:
             print(
                 'PB Test Analysis saving %s : %s',
-                file,
+                lift2,
                 e.__str__())
         finally:
             f.close()
     except etree.DocumentInvalid as e:
-        print('PB Test Analysis, %s not validated : %s' % (file, e))
+        print('PB Test Analysis, %s not validated : %s' % (lift2, e))
 
 #==================================================
 
@@ -742,12 +742,12 @@ class SWEEP: # Abstract Class
             fn=['id', 'qID', 'time', 'ip', 'query', 'bgp', 'precision', 'recall']
             writer = csv.DictWriter(f,fieldnames=fn,delimiter=sep)
             writer.writeheader()
-            for (id, queryID, time, ip, query, bgp, precision, recall) in self.memory:
+            for (id, queryID, t, ip, query, bgp, precision, recall) in self.memory:
                 if bgp is not None :
                     bgp_txt = ".\n".join([ toStr(s,p,o) for (itp, (s,p,o), sm,pm,om ) in bgp.tp_set ])
                 else:
                     bgp_txt = "..."
-                s = { 'id':id, 'qID':queryID, 'time':time, 'ip':ip, 'query':query, 'bgp':bgp_txt, 'precision':precision, 'recall':recall }
+                s = { 'id':id, 'qID':queryID, 'time':t, 'ip':ip, 'query':query, 'bgp':bgp_txt, 'precision':precision, 'recall':recall }
                 writer.writerow(s)
 
 #==================================================

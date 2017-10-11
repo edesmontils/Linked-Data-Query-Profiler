@@ -9,25 +9,18 @@ Tools to manage BGP
 #    All rights reserved.
 #    GPL v 2.0 license.
 
-from pprint import pprint
-
 import rdflib
-from rdflib import Literal, BNode, Namespace, RDF, URIRef, Variable
-from rdflib.plugins.sparql.parser import parseQuery
-from rdflib.plugins.sparql.algebra import translateQuery, pprintAlgebra
+from rdflib import Literal, BNode, RDF, URIRef, Variable
 from rdflib.compare import to_canonical_graph
-from rdflib.namespace import XSD
 
 import networkx as nx
 import networkx.algorithms.isomorphism as iso
 import re
-import sys
-import xml.etree.ElementTree as ET
 
-from urllib.parse import urlparse, urlencode, quote, unquote
 from lxml import etree  # http://lxml.de/index.html#documentation
 
-from tools.tools import *
+from tools.tools import isValidURI
+#from lib.QueryManager import QueryManager
 
 #==================================================
 
@@ -81,7 +74,7 @@ def canonicalize_sparql_bgp(gp):
         g.add((triple_bnode, RDF['subject'], s))
         g.add((triple_bnode, RDF['predicate'], p))
         g.add((triple_bnode, RDF['object'], o))
-    cg = rdflib.compare.to_canonical_graph(g)
+    cg = to_canonical_graph(g)
     cgp = []
     for triple_bnode in cg.subjects(RDF['type'], RDF['Statement']):
         t = [
@@ -735,6 +728,6 @@ if __name__ == "__main__":
     (BGPSet4, _) = qm.extractBGP(query4)
     (BGPSet5, _) = qm.extractBGP(query5)
     #print(calcPrecisionRecall(BGPSet4,BGPSet5))
-    haveSelfJoin(BGPSet4)
+    haveJoin(BGPSet4)
 
 

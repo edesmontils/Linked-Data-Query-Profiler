@@ -9,32 +9,25 @@ Application ...
 #    All rights reserved.
 #    GPL v 2.0 license.
 
-# import sys
-import socket
-# from tools.Socket import *
-from threading import *
-
 import multiprocessing as mp
 
 import datetime as dt
-import iso8601 # https://pypi.python.org/pypi/iso8601/     http://pyiso8601.readthedocs.io/en/latest/
-  
-import re
+
 import argparse
 import html
 
-from tools.tools import *
+from tools.tools import now
 from operator import itemgetter
 
 from lxml import etree  # http://lxml.de/index.html#documentation
-from lib.bgp import *
-from lib.QueryManager import *
+from lib.bgp import simplifyVars, unSerialize, unSerializeBGP
+from lib.QueryManager import QueryManager
 
 from io import StringIO
 
-from sweep import *
+from sweep import SWEEP, toStr
 
-from flask import Flask, render_template, request, jsonify, session,url_for
+from flask import Flask, render_template, request, jsonify
 # http://flask.pocoo.org/docs/0.12/
 
 class Context(object):
@@ -46,7 +39,7 @@ class Context(object):
         self.cpt = 0
         self.list = mp.Manager().list()
         self.to = 0.0
-        self.gap = 0.0 
+        self.gap = 0.0
         self.opt = False
         self.nlast = 10
         self.nbQueries = 0
@@ -60,7 +53,7 @@ class Context(object):
         self.nbEmpty = 0
         self.chglientMode = False
         self.qm = QueryManager(modeStat = False)
-        
+
 ctx = Context()
 
 #==================================================
@@ -107,7 +100,7 @@ def bo():
         rep += '</tr>'
     rep += '</table></td>'
 
-    t += rep + '<tr></table>' 
+    t += rep + '<tr></table>'
 
     return rep #'<p>Not implemented</p>'
 
@@ -123,7 +116,7 @@ def doPR():
         avgPrecision = 0
         avgRecall = 0
         avgQual = 0
-    if nbbgp>0 :                
+    if nbbgp>0 :
         Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
     else:
         Acuteness = 0
@@ -143,7 +136,7 @@ def sweep():
         avgPrecision = 0
         avgRecall = 0
         avgQual = 0
-    if nbbgp>0 :                
+    if nbbgp>0 :
         Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
     else:
         Acuteness = 0
@@ -172,7 +165,7 @@ def sweep():
     # rep += '<td>Nb Bad formed Queries</td>'
     # rep += '<td>Nb TPF Client Error</td>'
     # rep += '<td>Nb TPF Client Query Error</td>'
-    # rep += '<td>Nb Other query Error</td>'   
+    # rep += '<td>Nb Other query Error</td>'
 
     rep += '<td>BGP</td><td>TPQ</td>'
     rep += '</thead><tr>'
@@ -261,41 +254,41 @@ def processInform():
     if request.method == 'POST':
 
         ip = request.remote_addr
-        
+
         errtype = request.form['errtype']
         queryNb = request.form['no']
         if errtype == 'QBF':
             print('(%s)'%queryNb,'Query Bad Formed :',request.form['data'])
             ctx.sweep.delQuery(queryNb)
-            ctx.nbCancelledQueries += 1 
+            ctx.nbCancelledQueries += 1
             ctx.nbQBF += 1
         elif errtype == 'TO':
             print('(%s)'%queryNb,'Time Out :',request.form['data'])
             ctx.sweep.delQuery(queryNb)
-            ctx.nbCancelledQueries += 1 
+            ctx.nbCancelledQueries += 1
             ctx.nbTO += 1
         elif errtype == 'CltErr':
             print('(%s)'%queryNb,'TPF Client Error for :',request.form['data'])
             ctx.sweep.delQuery(queryNb)
-            ctx.nbCancelledQueries += 1 
+            ctx.nbCancelledQueries += 1
             ctx.nbClientError += 1
         elif errtype == 'EQ':
             print('(%s)'%queryNb,'Error Query for :',request.form['data'])
             ctx.sweep.delQuery(queryNb)
-            ctx.nbCancelledQueries += 1 
+            ctx.nbCancelledQueries += 1
             ctx.nbEQ += 1
         elif errtype == 'Other':
             print('(%s)'%queryNb,'Unknown Pb for query :',request.form['data'])
-            ctx.sweep.delQuery(queryNb)  
-            ctx.nbCancelledQueries += 1       
-            ctx.nbOther += 1 
+            ctx.sweep.delQuery(queryNb)
+            ctx.nbCancelledQueries += 1
+            ctx.nbOther += 1
         elif errtype == 'Empty':
             print('(%s)'%queryNb,'Empty for :',request.form['data'])
             ctx.nbEmpty += 1
         else:
             print('(%s)'%queryNb,'Unknown Pb for query :',request.form['data'])
             ctx.sweep.delQuery(queryNb)
-            ctx.nbCancelledQueries += 1 
+            ctx.nbCancelledQueries += 1
             ctx.nbOther += 1
         return jsonify(result=True)
     else:
@@ -328,12 +321,12 @@ def processQuery():
             elif "::ffff:" in client:
                 q.set('client', client[7:])
             else : q.set('client',client)
-            
+
             print('QUERY - ip-remote:',ip,' client:',client, ' choix:',q.get('client'))
             ip = q.get('client')
 
             query = q.text
-            time = now()# fromISO(q.attrib['time']) 
+            time = now()# fromISO(q.attrib['time'])
 
             bgp_list = request.form['bgp_list']
             l = []
@@ -358,11 +351,11 @@ def processQuery():
                 rang += 1
                 ctx.sweep.putQuery(time,ip,query,bgp,str(queryID)+'_'+str(rang))
 
-            return jsonify(result=True)            
+            return jsonify(result=True)
         except Exception as e:
             print('Exception',e)
             print('About:',data)
-            return jsonify(result=False)       
+            return jsonify(result=False)
     else:
         print('"query" not implemented for HTTP GET')
         return jsonify(result=False)
@@ -386,7 +379,7 @@ def processData():
         elif client in ["undefined","", "undefine"]:
             client = ip
         elif "::ffff:" in client:
-            client = client[7:]   
+            client = client[7:]
 
         print('DATA - ip-remote:',ip,' ip-post:',ip2, ' choix:',client)
 
@@ -401,14 +394,14 @@ def processData():
                     s = unSerialize(e[0])
                     p = unSerialize(e[1])
                     o = unSerialize(e[2])
-                    ctx.sweep.putEntry(i,s,p,o,time,client)  
+                    ctx.sweep.putEntry(i,s,p,o,time,client)
                     print('new TPQ : ',toStr(s,p,o))
 
                 elif e.tag == 'd':
                     xs = unSerialize(e[0])
                     xp = unSerialize(e[1])
                     xo = unSerialize(e[2])
-                    ctx.sweep.putData(i, xs, xp, xo)  
+                    ctx.sweep.putData(i, xs, xp, xo)
                     # print('new data : ',toStr(xs,xp,xo))
 
                 elif e.tag == 'm':
@@ -416,17 +409,17 @@ def processData():
                     # p = unSerialize(e[1])
                     # o = unSerialize(e[2])
                     # print('new meta : ',toStr(s,p,o))
-                    pass                  
+                    pass
                 else:
                     pass
 
             ctx.sweep.putEnd(i)
 
-            return jsonify(result=True)              
+            return jsonify(result=True)
         except Exception as e:
             print('Exception',e)
             print('About:',data)
-            return jsonify(result=False)       
+            return jsonify(result=False)
     else:
         print('"data" not implemented for HTTP GET')
         return jsonify(result=False)
@@ -475,7 +468,7 @@ if __name__ == '__main__':
     parser.add_argument("--chglientMode", dest="chglientMode", action="store_true", help="Do TPF Client mode")
 
     args = parser.parse_args()
- 
+
     ctx.gap = args.gap
     if args.timeout == 0:
         ctx.to = ctx.gap
@@ -483,7 +476,7 @@ if __name__ == '__main__':
         ctx.to = args.timeout
 
     if args.doOptimistic: ctx.sweep.swapOptimistic()
-    ctx.opt = args.doOptimistic 
+    ctx.opt = args.doOptimistic
     ctx.chglientMode =  args.chglientMode
 
     ctx.sweep = SWEEP(dt.timedelta(minutes= ctx.gap),dt.timedelta(minutes= ctx.to),ctx.opt)
@@ -502,7 +495,7 @@ if __name__ == '__main__':
         # while 1:
         #     time.sleep(60)
     except KeyboardInterrupt:
-        ctx.sweep.endSession() 
+        ctx.sweep.endSession()
         ctx.sweep.stop()
         ctx.qm.stop()
         resProcess.join()
