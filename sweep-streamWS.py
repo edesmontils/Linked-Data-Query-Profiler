@@ -298,7 +298,6 @@ def processInform():
 @app.route('/query', methods=['post','get'])
 def processQuery():
     if request.method == 'POST':
-        ip = request.remote_addr
         print(request.headers)
         data = request.form['data']
 
@@ -306,23 +305,23 @@ def processQuery():
         try:
             tree = etree.parse(StringIO(data), ctx.parser)
             q = tree.getroot()
+            ip_remote = request.remote_addr
+            client = q.get('client')
+            if client is None :
+                if 'x-forwarded-for' in request.headers:
+                    client = request.headers['x-forwarded-for']
+                elif 'X-Forwarded-For' in request.headers:
+                    client = request.headers['X-Forwarded-For']
 
-            if ctx.chglientMode :
-                client = q.get('client') # !!!!!!!!!!!!!!!!!!!!!!!!!
-            elif 'x-forwarded-for' in request.headers:
-                client = request.headers['x-forwarded-for']
-            else:
-                client = None
+                if client is None:
+                    q.set('client',str(ip_remote) )
+                elif client in ["undefined","", "undefine"]:
+                    q.set('client',str(ip_remote) )
+                elif "::ffff:" in client:
+                    q.set('client', client[7:])
+                else : q.set('client',client)
 
-            if client is None:
-                q.set('client',str(ip) )
-            elif client in ["undefined","", "undefine"]:
-                q.set('client',str(ip) )
-            elif "::ffff:" in client:
-                q.set('client', client[7:])
-            else : q.set('client',client)
-
-            print('QUERY - ip-remote:',ip,' client:',client, ' choix:',q.get('client'))
+            print('QUERY - ip-remote:',ip_remote,' client:',client, ' choix:',q.get('client'))
             ip = q.get('client')
 
             query = q.text
