@@ -231,13 +231,14 @@ class TPFEP(Endpoint):
 
     def query(self, qstr, params = ''):
         try:
+            appli = self.appli # 'http_proxy= '+self.appli
             # 'run' n'existe que depuis python 3.5 !!! donc pas en 3.2 !!!!
-            print('Execute:',self.appli,self.service+'/'+self.dataset,qstr, self.clientParams+' '+params)
+            print('Execute:',appli,self.service+'/'+self.dataset,qstr, self.clientParams+' '+params)
             if (self.clientParams == '') and (params == ''):
-                ret = subprocess.run([self.appli,self.service+'/'+self.dataset, qstr], 
+                ret = subprocess.run([appli,self.service+'/'+self.dataset, qstr], 
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)#, encoding='utf-8')
             else :
-                ret = subprocess.run([self.appli,self.service+'/'+self.dataset, self.clientParams+params, qstr], 
+                ret = subprocess.run([appli,self.service+'/'+self.dataset, self.clientParams+params, qstr], 
                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)#, encoding='utf-8')
         except subprocess.CalledProcessError as e :
             raise TPFClientError( "TPF endpoint error (subprocess CalledProcessError) : "+e.__str__() )

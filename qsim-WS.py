@@ -390,7 +390,7 @@ if __name__ == '__main__':
         if ref.text is None: ref.text=''
         print('Configure ',l.get('nom'), ' in ',atpfServer+'/'+f.get('nom'))
         sp = TPFEP(service = atpfServer, dataset= f.get('nom'), clientParams= '-s '+asweep )
-        sp.setEngine('http_proxy= '+atpfClient)
+        sp.setEngine(atpfClient)
         ctx.listeBases[l.get('nom')] = {'fichier':f.get('nom'),'prefixe':f.get('prefixe'),'référence':ref.text,
                                         'description':etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
                                         'tables':[]}
