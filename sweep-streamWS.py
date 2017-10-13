@@ -30,6 +30,9 @@ from sweep import SWEEP, toStr
 from flask import Flask, render_template, request, jsonify
 # http://flask.pocoo.org/docs/0.12/
 
+from urllib.parse import urlparse
+from configparser import ConfigParser, ExtendedInterpolation
+
 class Context(object):
     """docstring for Context"""
     def __init__(self):
@@ -51,7 +54,6 @@ class Context(object):
         self.nbOther = 0
         self.nbClientError = 0
         self.nbEmpty = 0
-        self.chglientMode = False
         self.qm = QueryManager(modeStat = False)
 
 ctx = Context()
@@ -329,12 +331,14 @@ def processQuery():
 
             bgp_list = request.form['bgp_list']
             l = []
+            print(bgp_list)
             lbgp = etree.parse(StringIO(bgp_list), ctx.parser)
             for x in lbgp.getroot():
                 bgp = unSerializeBGP(x)
                 l.append(bgp)
 
             if len(l) == 0:
+                print('BGP list empty... extracting BGP from the query')
                 (bgp,nquery) = ctx.qm.extractBGP(query)
                 query = nquery
                 l.append(bgp)
@@ -463,32 +467,58 @@ if __name__ == '__main__':
     parser.add_argument("-o","--optimistic", help="BGP time is the last TP added (False by default)",
                     action="store_true",dest="doOptimistic")
     parser.add_argument("-l", "--last", type=int, default=10, dest="nlast", help="Number of last BGPs to view (10 by default)")
+    parser.add_argument("--host", default="0.0.0.0", dest="host", help="host ('0.0.0.0' by default)")
     parser.add_argument("--port", type=int, default=5000, dest="port", help="Port (5000 by default)")
-    parser.add_argument("--chglientMode", dest="chglientMode", action="store_true", help="Do TPF Client mode")
+    # parser.add_argument("--chglientMode", dest="chglientMode", action="store_true", help="Do TPF Client mode")
+
+    parser.add_argument("-f", "--config", default='', dest="cfg", help="Config file")
 
     args = parser.parse_args()
 
-    ctx.gap = args.gap
-    if args.timeout == 0:
+    if (args.cfg == '') :
+        ahost = args.host
+        aport = args.port
+        agap = args.gap        
+        atimeout = args.timeout
+        aurl = 'http://'+ahost+":"+str(aport)
+        aOptimistic = args.doOptimistic
+        anlast = args.nlast
+    else :
+        cfg = ConfigParser(interpolation=ExtendedInterpolation())
+        r = cfg.read(args.cfg)
+        if r == [] :
+            print('Config file unkown')
+            exit()
+        print(cfg.sections())
+        sweepCfg = cfg['SWEEP-WS']
+        agap = float(sweepCfg['Gap'])
+        atimeout = float(sweepCfg['TimeOut'])
+        aOptimistic = sweepCfg.getboolean('Optimistic')
+        aurl = sweepCfg['LocalAddr']
+        purl = urlparse(aurl)
+        ahost = purl.hostname
+        aport = purl.port
+        anlast = int(sweepCfg['BGP2View'])
+
+    ctx.gap = agap
+    if atimeout == 0:
         ctx.to = ctx.gap
     else:
-        ctx.to = args.timeout
+        ctx.to = atimeout
 
-    if args.doOptimistic: ctx.sweep.swapOptimistic()
-    ctx.opt = args.doOptimistic
-    ctx.chglientMode =  args.chglientMode
+    if aOptimistic: ctx.sweep.swapOptimistic()
+    ctx.opt = aOptimistic
 
     ctx.sweep = SWEEP(dt.timedelta(minutes= ctx.gap),dt.timedelta(minutes= ctx.to),ctx.opt)
     resProcess = mp.Process(target=processResults, args=(ctx.sweep,ctx.list))
-    ctx.nlast = args.nlast
-
+    ctx.nlast = anlast
 
     try:
         ctx.sweep.startSession()
         resProcess.start()
         app.run(
-            host="0.0.0.0",
-            port=int(args.port),
+            host=ahost,
+            port=int(aport),
             debug=False
         )
         # while 1:

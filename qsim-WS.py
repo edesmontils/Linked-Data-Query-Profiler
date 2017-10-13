@@ -26,6 +26,9 @@ from lxml import etree  # http://lxml.de/index.html#documentation
 import requests as http
 # http://docs.python-requests.org/en/master/user/quickstart/
 
+from urllib.parse import urlparse
+from configparser import ConfigParser, ExtendedInterpolation
+
 class Context(object):
     """docstring for Context"""
     def __init__(self):
@@ -46,6 +49,7 @@ class Context(object):
         self.doPR = False
         self.lastProcessing = -1
         self.gap = 60
+        self.addr = ''
 
     def setLDQPServer(self, host):
         self.sweep = host
@@ -225,6 +229,8 @@ def doTab(s):
     tab += '<br/>'
     return tab
 
+# '<l><bgp><tp><s type="var" val="s"/><p type="iri" val="http://www.w3.org/1999/02/22-rdf-syntax-ns#type"/><o type="var" val="o"/></tp></bgp></l>'
+
 def treat(query,bgp_list,ip,datasource):
     try:
         ctx.nbQuery += 1
@@ -237,13 +243,16 @@ def treat(query,bgp_list,ip,datasource):
             query = nquery
             bgp_list = serializeBGP2str(bgp) 
 
-        mess = '<query time="'+date2str(now())+'" client="'+str(ip)+'" no="'+no+'"><![CDATA['+query+' ]]></query>'
+        # mess = '<query time="'+date2str(now())+'" client="'+str(ip)+'" no="'+no+'"><![CDATA['+query+' ]]></query>'
+        mess = '<query time="'+date2str(now())+'" no="'+no+'"><![CDATA['+query+' ]]></query>'
 
         url = ctx.sweep+'/query'
         print('(%d)'%nbe,'query:',mess)
+
+        bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
 
-        #s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': '<l>'+bgp_list+'</l>'})
+        #s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': bgp_list})
         
         # print('res:',s.json()['result'])
         # res=  ctx.listeSP[datasource].query(query) # ctx.tpfc.query(query)
@@ -251,7 +260,7 @@ def treat(query,bgp_list,ip,datasource):
         # print(type(res))
         try:
             before = now()
-            res=  ctx.listeSP[datasource].query(query)
+            res=  ctx.listeSP[datasource].query(query)#,' -i '+bgp_list+' ')
             after = now()
             ctx.lastProcessing = after - before
             # print('(%d)'%nbe,':',rep)
@@ -260,7 +269,7 @@ def treat(query,bgp_list,ip,datasource):
                url = ctx.sweep+'/inform'
                s = http.post(url,data={'data':mess,'errtype':'Empty', 'no':no})
             else: 
-                print('(%d, %s sec.)'%(nbe,ctx.lastProcessing.total_seconds()),': [...]')#,rep)
+                print('(%d, %s sec.)'%(nbe,ctx.lastProcessing.total_seconds()),': [...]')#,res)
             if ctx.lastProcessing > ctx.gap :
                 print('(%d, %s sec.)'%(nbe,ctx.lastProcessing.total_seconds()),'!!!!!!!!! hors Gap (%s) !!!!!!!!!'%ctx.gap.total_seconds())
 
@@ -330,11 +339,43 @@ if __name__ == '__main__':
     parser.add_argument("--host", default="127.0.0.1", dest="host", help="host ('127.0.0.1' by default)")
     parser.add_argument("--port", type=int, default=5002, dest="port", help="Port (5002 by default)")
 
+    parser.add_argument("-f", "--config", default='', dest="cfg", help="Config file")
+
     args = parser.parse_args()
-    ctx.setLDQPServer(args.sweep)
+
+    if (args.cfg == '') :
+        asweep = args.sweep
+        atpfServer = args.tpfServer
+        atpfClient = args.tpfClient
+        ahost = args.host
+        aport = args.port
+        agap = args.gap
+        avalid = args.valid
+        ato = args.timeout
+        aurl = 'http://'+ahost+":"+str(aport)
+    else :
+        cfg = ConfigParser(interpolation=ExtendedInterpolation())
+        r = cfg.read(args.cfg)
+        if r == [] :
+            print('Config file unkown')
+            exit()
+        print(cfg.sections())
+        qsimCfg = cfg['QSIM-WS']
+        asweep = qsimCfg['SWEEP']
+        atpfServer = qsimCfg['TPFServer']
+        atpfClient = qsimCfg['TPFClient']
+        agap = float(qsimCfg['Gap'])
+        avalid = qsimCfg.getboolean('Precision-Recall')
+        ato = float(qsimCfg['TimeOut'])
+        aurl = qsimCfg['LocalAddr']
+        purl = urlparse(aurl)
+        ahost = purl.hostname
+        aport = purl.port
+
+    ctx.setLDQPServer(asweep)
     # http://localhost:5000/lift : serveur TPF LIFT (exemple du papier)
     # http://localhost:5001/dbpedia_3_9 server dppedia si : ssh -L 5001:172.16.9.3:5001 desmontils@172.16.9.15
-    ctx.gap = dt.timedelta(minutes= args.gap)
+    ctx.gap = dt.timedelta(minutes= agap)
     XMLparser = etree.XMLParser(recover=True, strip_cdata=True)
     ctx.tree = etree.parse('config.xml', XMLparser)
     #---
@@ -347,9 +388,9 @@ if __name__ == '__main__':
         f = l.find('fichier')
         ref = l.find('référence')
         if ref.text is None: ref.text=''
-        print('Configure ',l.get('nom'), ' in ',args.tpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service = args.tpfServer, dataset= f.get('nom'), clientParams= '-s '+args.sweep )
-        sp.setEngine(args.tpfClient )
+        print('Configure ',l.get('nom'), ' in ',atpfServer+'/'+f.get('nom'))
+        sp = TPFEP(service = atpfServer, dataset= f.get('nom'), clientParams= '-s '+asweep )
+        sp.setEngine(atpfClient )
         ctx.listeBases[l.get('nom')] = {'fichier':f.get('nom'),'prefixe':f.get('prefixe'),'référence':ref.text,
                                         'description':etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
                                         'tables':[]}
@@ -359,13 +400,14 @@ if __name__ == '__main__':
     ctx.name = ctx.tree.getroot().get('name')
     if ctx.tree.getroot().get('debug') == 'false': ctx.debug = False
     else: ctx.debug = True
-    if args.valid:
+    if avalid:
         ctx.doPR = True
     try:
-        print('Running qsim-WS on ' , args.host+":"+str(args.port))
+        ctx.addr = aurl
+        print('Running qsim-WS on ' , ctx.addr)
         app.run(
-            host=args.host,
-            port=int(args.port),
+            host=ahost,
+            port=int(aport),
             debug=True
         )
     except KeyboardInterrupt: 
