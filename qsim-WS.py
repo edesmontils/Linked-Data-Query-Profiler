@@ -26,7 +26,7 @@ from lxml import etree  # http://lxml.de/index.html#documentation
 import requests as http
 # http://docs.python-requests.org/en/master/user/quickstart/
 
-from urllib.parse import urlparse
+from urllib.parse import urlparse, quote_plus
 from configparser import ConfigParser, ExtendedInterpolation
 
 class Context(object):
@@ -50,6 +50,9 @@ class Context(object):
         self.lastProcessing = -1
         self.gap = 60
         self.addr = ''
+        self.addr_ext = ''
+        # self.BGPRefList = dict()
+        # self.BGPNb = 0
 
     def setLDQPServer(self, host):
         self.sweep = host
@@ -178,12 +181,18 @@ def help():
         if cont.text is not None: s+= etree.tostring(cont, encoding='utf8').decode('utf8')
     return s
 
+# @app.route('/bgp/<int:bgp_id>', methods=['get'])
+# def send_bgp(bgp_id) :
+#     if bgp_id == 0:
+#         return "Test"
+#     else: return ctx.BGPRefList[bgp_id]
+
 @app.route('/envoyer', methods=['post'])
 def envoyer():
     query = request.form['requete']
     datasource = request.form['base']
     bgp_list = request.form['bgp_list']
-    print('Recieved BGP:',bgp_list)
+    # print('Recieved BGP:',bgp_list)
     if bgp_list is '' :
         bgp_list = ''
     ip = request.remote_addr
@@ -260,7 +269,10 @@ def treat(query,bgp_list,ip,datasource):
         # print(type(res))
         try:
             before = now()
-            res=  ctx.listeSP[datasource].query(query)#,' -i '+bgp_list+' ')
+            # ctx.BGPNb += 1
+            # bgp_uri = ctx.addr_ext+'/bgp/'+str(ctx.BGPNb)
+            # ctx.BGPRefList[ctx.BGPNb] = bgp_list    
+            res =  ctx.listeSP[datasource].query('#bgp-list#'+quote_plus(bgp_list)+'\n'+query)
             after = now()
             ctx.lastProcessing = after - before
             # print('(%d)'%nbe,':',rep)
@@ -353,6 +365,7 @@ if __name__ == '__main__':
         avalid = args.valid
         ato = args.timeout
         aurl = 'http://'+ahost+":"+str(aport)
+        aurl_ext = aurl
     else :
         cfg = ConfigParser(interpolation=ExtendedInterpolation())
         r = cfg.read(args.cfg)
@@ -371,6 +384,7 @@ if __name__ == '__main__':
         purl = urlparse(aurl)
         ahost = purl.hostname
         aport = purl.port
+        aurl_ext = qsimCfg['ExternalAddr']
 
     ctx.setLDQPServer(asweep)
     # http://localhost:5000/lift : serveur TPF LIFT (exemple du papier)
@@ -389,7 +403,7 @@ if __name__ == '__main__':
         ref = l.find('référence')
         if ref.text is None: ref.text=''
         print('Configure ',l.get('nom'), ' in ',atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service = atpfServer, dataset= f.get('nom'), clientParams= '-s '+asweep )
+        sp = TPFEP(service = atpfServer, dataset= f.get('nom'), clientParams= [ '-s %s'%asweep ] )
         sp.setEngine(atpfClient)
         ctx.listeBases[l.get('nom')] = {'fichier':f.get('nom'),'prefixe':f.get('prefixe'),'référence':ref.text,
                                         'description':etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
@@ -404,6 +418,7 @@ if __name__ == '__main__':
         ctx.doPR = True
     try:
         ctx.addr = aurl
+        ctx.addr_ext = aurl_ext
         print('Running qsim-WS on ' , ctx.addr)
         app.run(
             host=ahost,

@@ -117,7 +117,7 @@ class Endpoint:
             self.cache.clear()
         self.do_cache = mode;
 
-    def query(self, qstr, params = ''):
+    def query(self, qstr, params = []):
         return []
 
     def is_answering(self, qstr):
@@ -167,7 +167,7 @@ class SPARQLEP (Endpoint):
     	Endpoint.setTimeOut(self,to)
     	self.engine.setTimeout(self.timeOut)
 
-    def query(self, qstr, params = ''):
+    def query(self, qstr, params = []):
         self.engine.setQuery(qstr)
         return self.engine.query().convert()
 
@@ -215,7 +215,7 @@ class DBPediaEP (SPARQLEP):
 #==================================================
 
 class TPFEP(Endpoint):
-    def __init__(self,service = DEFAULT_TPF_EP, dataset = DEFAULT_TPF_DATASET, clientParams = '', cacheDir = '.'):
+    def __init__(self,service = DEFAULT_TPF_EP, dataset = DEFAULT_TPF_DATASET, clientParams = [], cacheDir = '.'):
         Endpoint.__init__(self,service, cacheType=MODE_TE_TPF, cacheDir=cacheDir)
         self.dataset = dataset
         self.reSyntaxError = re.compile(r'\A(ERROR\:).*?\n\n(Syntax\ error\ in\ query).*',re.IGNORECASE)
@@ -229,24 +229,24 @@ class TPFEP(Endpoint):
     def setDataset(self,d):
         self.dataset = d
 
-    def query(self, qstr, params = ''):
+    def query(self, qstr, params = []):
         try:
-            appli = self.appli # 'http_proxy= '+self.appli
             # 'run' n'existe que depuis python 3.5 !!! donc pas en 3.2 !!!!
-            print('Execute:',appli,self.service+'/'+self.dataset,qstr, self.clientParams+' '+params)
-            if (self.clientParams == '') and (params == ''):
-                ret = subprocess.run([appli,self.service+'/'+self.dataset, qstr], 
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)#, encoding='utf-8')
-            else :
-                ret = subprocess.run([appli,self.service+'/'+self.dataset, self.clientParams+params, qstr], 
-                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)#, encoding='utf-8')
+            # print('Execute:',self.appli,self.service+'/'+self.dataset, self.clientParams,params,qstr)
+
+            commande = [self.appli, self.service+'/'+self.dataset] + self.clientParams  + [qstr]  + params
+
+            ret = subprocess.run(commande, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)
+
         except subprocess.CalledProcessError as e :
             raise TPFClientError( "TPF endpoint error (subprocess CalledProcessError) : "+e.__str__() )
         except subprocess.TimeoutExpired as e : # uniquement python 3.3 !!!
             raise TimeOut("TPF timeout (subprocess TimeoutExpired) : "+e.__str__())
-
+        # except Exception as e :
+        #     print(e)
+        #     exit()
         # pprint(ret)
-        #sys.exit()
+        # sys.exit()
         out = ret.stdout
         if out != '':
             if type(out) != str : 

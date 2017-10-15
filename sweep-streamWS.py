@@ -30,8 +30,11 @@ from sweep import SWEEP, toStr
 from flask import Flask, render_template, request, jsonify
 # http://flask.pocoo.org/docs/0.12/
 
-from urllib.parse import urlparse
+from urllib.parse import urlparse, unquote_plus
 from configparser import ConfigParser, ExtendedInterpolation
+
+import requests as http
+
 
 class Context(object):
     """docstring for Context"""
@@ -329,8 +332,16 @@ def processQuery():
             query = q.text
             time = now()# fromISO(q.attrib['time'])
 
-            bgp_list = request.form['bgp_list']
+            if query.startswith('#bgp-list#') :
+                t = query.split('\n')
+                bgp_list = unquote_plus(t[0][10:])
+                del t[0]
+                query = '\n'.join(t)
+            else:
+                bgp_list = '<l/>'
+
             l = []
+            print(query)
             print(bgp_list)
             lbgp = etree.parse(StringIO(bgp_list), ctx.parser)
             for x in lbgp.getroot():
