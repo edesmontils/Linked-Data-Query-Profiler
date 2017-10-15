@@ -74,7 +74,7 @@ SWEEP_PURGE = -3
 SWEEP_ENTRY_TIMEOUT = 0.8 # percentage of the gap
 SWEEP_PURGE_TIMEOUT = 0.1 # percentage of the gap
 
-SWEEP_DEBUG_BGP_BUILD = False
+SWEEP_DEBUG_BGP_BUILD = True
 SWEEP_DEBUB_PR = False
 
 #==================================================
