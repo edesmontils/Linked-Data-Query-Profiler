@@ -4,7 +4,7 @@
 <!ENTITY seuil '10800'>
 ]>
 
-<mab version="0.1.0" debug="false" name="SWEEP Query Simulator">
+<mab version="0.1.1" debug="false" name="SWEEP Query Simulator">
 	<!-- numéro de version de l'application -->
 	<!-- durée limite de vie d'une copie de base : 60*60*3 = 3 heures -->
 	<seuil>&seuil;</seuil>
