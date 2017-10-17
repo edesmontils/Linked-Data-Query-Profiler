@@ -215,6 +215,29 @@ Then, ldf-client command line allows to specify the SWEEP server (with '-s').
 Next, apply next modifications to ./lib/sparql/SparqlIterator.js :
 ```nodejs
 ...
+var SparqlParser = require('sparqljs').Parser,
+    AsyncIterator = require('asynciterator'),
+    TransformIterator = AsyncIterator.TransformIterator,
+    ReorderingGraphPatternIterator = require('../triple-pattern-fragments/ReorderingGraphPatternIterator'),
+    UnionIterator = require('./UnionIterator'),
+    SortIterator = require('./SortIterator'),
+    DistinctIterator = require('./DistinctIterator'),
+    SparqlExpressionEvaluator = require('../util/SparqlExpressionEvaluator'),
+    _ = require('lodash'),
+    rdf = require('../util/RdfUtil'),
+    createErrorType = require('../util/CustomError');
+
+//------------------> Begin SWEEP <------------------------
+var http = require('request');
+//------------------> End SWEEP <------------------------
+
+var queryConstructors = {
+  SELECT: SparqlSelectIterator,
+  CONSTRUCT: SparqlConstructIterator,
+  DESCRIBE: SparqlDescribeIterator,
+  ASK: SparqlAskIterator,
+};
+...
   // Transform the query into a cascade of iterators
   try {
     // Parse the query if needed
