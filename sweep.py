@@ -16,9 +16,9 @@ import datetime as dt
 import time
 
 import csv
-from tools.tools import now
+from tools.tools import now, fromISO
 
-from rdflib import Variable
+from rdflib import Variable, URIRef, Literal
 
 from lxml import etree  # http://lxml.de/index.html#documentation
 from lib.bgp import serialize2string, egal, calcPrecisionRecall, canonicalize_sparql_bgp, serializeBGP
@@ -27,36 +27,198 @@ from collections import OrderedDict
 
 #==================================================
 
-class BGP:
-    def __init__(self, ref = False):
+class BasicGraphPattern:
+    def __init__(self, gap = None, tpq = None):
         self.tp_set = []
         self.input_set = set() # ens. des hash des entrées, pour ne pas mettre 2 fois la même
-        self.birthTime = now()
-        self.time = now()
-        self.client = ''
-        self.isRef = ref
+        if gap is None :
+            self.gap = dt.timedelta(minutes=1)
+        else: self.gap = gap
+        if tpq is None :
+            self.birthTime = now()
+            self.time = now()
+            self.client = 'Unknown'
+        else:
+            self.birthTime = tpq.time
+            self.time = tpq.time
+            self.client = tpq.client
+            self.add(tpq)
+
+    def add(self,tpq) :
+        assert self.client == tpq.client, "client différent"
+        assert tpq.time - self.time <= self.gap , "TPQ pas dans le gap"
+        self.time = tpq.time
+        self.tp_set.append( tpq )
+        self.input_set.add(tpq.sign())
 
     def age(self):
-        return now() - self.time
+        return now()- self.time
+
+    def isOld(self):
+        return self.age() > self.gap
 
     def toString(self):
         rep = ''
-        for (itp,(s,p,o),sm,pm,om) in self.tp_set:
-                rep += toStr(s,p,o) + " .\n "
+        for tpq in self.tp_set:
+                rep += tpq.toStr() + " .\n "
         return rep
 
     def print(self, tab=''):
-        #print(serializeBGP2str([ x for (x,sm,pm,om,h) in self.tp_set]))
         print(tab,'BGP:',self.client,' at ',self.time)
         print(tab,self.toString())
-        # for ((s,p,o),sm,pm,om) in self.tp_set:
-        #     print('\t'+toStr(s,p,o) )
+
+    def canBeCandidate(self, tpq):
+        return (tpq.client == self.client) and (tpq.time - self.time <= self.gap) and (tpq.sign() not in self.input_set)
+
+    def findTP(self, ntpq):
+        ref_couv = 0
+        ref_rang = 0
+        trouve = False
+        # on regarde si une constante du sujet et ou de l'objet est une injection
+        for (rang, tpq ) in  enumerate(self.tp_set):
+            # (bid, (bs, bp, bo), bsm, bpm, bom) = tp
+            if SWEEP_DEBUG_BGP_BUILD : 
+                print('_____')
+                print('\t\t Comparaison de :',new_tpq.toStr())
+                print('\t\t avec le TP :',tpq.toStr())
+                print('\t\tbsm:',tpq.sm) ; print('\t\tbpm:',tpq.pm); print('\t\tbom:',tpq.om)
+
+            (couv,d) = ntpq.nestedLoopOf(tpq)
+
+            nb_map = 0
+            nb_eq = 0
+            if d is not None:# on cherche à éviter d'avoir le même TP
+                for (i,j) in ( (ntpq.s,tpq.s) , (ntpq.p,tpq.p) , (ntpq.o,tpq.o)) :
+                    if (d[i] != i) and isinstance(j,Variable):
+                        nb_map +=1
+                    else:
+                        if (i == j) or (isinstance(i,Variable) and isinstance(j,Variable)):
+                            # le second opérande pose pb car interdit : ?s1 p ?o1 . ?s1 p ?o2 . :-(
+                            nb_eq +=1
+                        else:
+                            pass
+
+            if (couv > ref_couv) and (nb_map+nb_eq !=3) : 
+                trouve = True
+                ref_couv = couv
+                ref_d = d
+                break
+        # end for tpq
+
+        if trouve:
+            candTP= TriplePatternQuery(d[ntpq.s],d[ntpq.p],d[ntpq.o],ntpq.time,ntpq.client,ntpq.sm,ntpq.pm,ntpq.om)
+        else: candTP = None
+        return (trouve, candTP)
+
+
+    def existTP(self, candtp):
+        inTP = False
+        tp = None
+        # peut-être que un TP similaire a déjà été utilisé pour une autre valeur... alors pas la peine de le doubler
+        for  tp in  self.tp_set:
+            (inTP,m) = candtp.equal(tp) 
+            if inTP: break
+        return (inTP, tp)
 
 #==================================================
 
+class TripplePattern(object):
+    """docstring for TripplePattern"""
+    def __init__(self, s,p,o):
+        super(TripplePattern, self).__init__()
+        (self.s,self.p,self.o) = (s,p,o)
+
+    def equal(self, tp):
+        return egal(self.spo(),tp.spo())
+
+    def toStr(self):
+        return serialize2string(self.s)+' '+serialize2string(self.p)+' '+serialize2string(self.o)
+
+    def toString(self):
+        return self.toStr()
+
+    def sign(self):
+        if isinstance(self.s,Variable): s = Variable("s")
+        else: s = self.s
+        if isinstance(self.p,Variable): p = Variable("p")
+        else: p = self.p
+        if isinstance(self.o,Variable): o = Variable("o")
+        else: o = self.o
+        return hcode(s,p,o)
+
+    def spo(self):
+        return (self.s,self.p,self.o)
+
+    def isDump(self): # tp is <?s ?p ?o> ?
+        return isinstance(self.s,Variable) and isinstance(self.p,Variable) and isinstance(self.o,Variable)
+
+    def renameVars(self,i) :
+        if isinstance(self.s,Variable): self.s = Variable("s"+str(i).replace("-","_"))
+        if isinstance(self.p,Variable): self.p = Variable("p"+str(i).replace("-","_"))
+        if isinstance(self.o,Variable): self.o = Variable("o"+str(i).replace("-","_"))
+
+class TriplePatternQuery(TripplePattern):
+    """docstring for TriplePatternQuery"""
+    def __init__(self, s,p,o,time,client,sm,pm,om ):
+        super(TriplePatternQuery, self).__init__(s,p,o)
+        (self.time,self.client,self.sm,self.pm,self.om) = (time,client,sm,pm,om)
+ 
+    def nestedLoopOf(self,tpq) :
+        #On recherche les mappings possibles : s-s, s-p, s-o, etc.
+        d = None
+        res = list()
+        chercher('',(self.s,self.p,self.o), dict({tpq.s:tpq.sm,tpq.p:tpq.pm,tpq.o:tpq.om}), dict(),res)
+        # print('==='); pprint(res); print('===')
+        couv = 0
+        for x in res:
+            if x['nb'] > couv:
+                couv = x['nb']
+                d = x
+        return (couv,d)
+
+#appel chercher( (s,p,o),{bs:bsm,bp:bpm,bo:bom}, dict, set )
+def chercher(tab,ref,tp,d,res):
+    #print(tab,'===> Ref:',ref); print(tab,'---> tp:',tp); print(tab,'---> d:',d); print(tab,'---> res:',res)
+    if len(ref)==0:
+        #print(tab,'|--> réponse !')
+        ok = 0
+        for (i,j) in d.items():
+            if i!=j: ok += 1 
+        if ok>0: 
+            d2 = d.copy()
+            d2['nb']=ok
+            res.append(d2)
+    else:
+        i = ref[0]
+        reste = ref[1:]
+        if isinstance(i,Variable):
+            #print(tab,'|--> Variable !')
+            d[i]=i
+            chercher(tab+'\t',reste, tp, d, res)
+            d.pop(i)
+        else:
+            for (j,bj) in tp.copy().items() :
+                if i in bj:
+                    #print(tab,'|--> choix =>',i,j)
+                    d[i] = j
+                    tp.pop(j)
+                    chercher(tab+'\t',reste,tp,d,res)
+                    tp[j]=bj
+                    d.pop(i) 
+                else: 
+                    #print(tab,'|--> pas bon =>',i,j)
+                    pass
+            d[i]=i
+            #print(tab,'|--> i==i:',i)
+            chercher(tab+'\t',reste, tp, d, res) 
+            d.pop(i)
+
+#==================================================      
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
 
+def hcode(s,p,o) :
+    return hash(toStr(s,p,o))
 #==================================================
 
 SWEEP_IN_ENTRY = 1
@@ -74,7 +236,7 @@ SWEEP_PURGE = -3
 SWEEP_ENTRY_TIMEOUT = 0.8 # percentage of the gap
 SWEEP_PURGE_TIMEOUT = 0.1 # percentage of the gap
 
-SWEEP_DEBUG_BGP_BUILD = True
+SWEEP_DEBUG_BGP_BUILD = False
 SWEEP_DEBUB_PR = False
 
 #==================================================
@@ -148,44 +310,7 @@ def processAgregator(in_queue,out_queue, val_queue, ctx):
     out_queue.put(None)
     val_queue.put(None)
 
-
 #==================================================
-#appel chercher( (s,p,o),{bs:bsm,bp:bpm,bo:bom}, dict, set )
-def chercher(tab,ref,tp,d,res):
-    #print(tab,'===> Ref:',ref); print(tab,'---> tp:',tp); print(tab,'---> d:',d); print(tab,'---> res:',res)
-    if len(ref)==0:
-        #print(tab,'|--> réponse !')
-        ok = 0
-        for (i,j) in d.items():
-            if i!=j: ok += 1 
-        if ok>0: 
-            d2 = d.copy()
-            d2['nb']=ok
-            res.append(d2)
-    else:
-        i = ref[0]
-        reste = ref[1:]
-        if isinstance(i,Variable):
-            #print(tab,'|--> Variable !')
-            d[i]=i
-            chercher(tab+'\t',reste, tp, d, res)
-            d.pop(i)
-        else:
-            for (j,bj) in tp.copy().items() :
-                if i in bj:
-                    #print(tab,'|--> choix =>',i,j)
-                    d[i] = j
-                    tp.pop(j)
-                    chercher(tab+'\t',reste,tp,d,res)
-                    tp[j]=bj
-                    d.pop(i) 
-                else: 
-                    #print(tab,'|--> pas bon =>',i,j)
-                    pass
-            d[i]=i
-            #print(tab,'|--> i==i:',i)
-            chercher(tab+'\t',reste, tp, d, res) 
-            d.pop(i)               
 
 def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
     gap = ctx.gap
@@ -213,174 +338,68 @@ def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
                 out_queue.put(SWEEP_END_SESSION)
             else :
                 (s,p,o,time,client,sm,pm,om) = val
+                new_tpq = TriplePatternQuery(s,p,o,time,client,sm,pm,om)
+                new_tpq.renameVars(id)
+
                 currentTime = now()
                 if SWEEP_DEBUG_BGP_BUILD :
-                    print('==============================================') 
-                    print('==============================================') 
-                    print(id,' : Etude de :',toStr(s,p,o))
-                    print('|sm:',sm)
-                    print('|pm:',pm)
-                    print('|om:',om)
-                if not(isinstance(s,Variable) and isinstance(p,Variable) and isinstance(o,Variable) ):
-                    h = hash(toStr(s,p,o))
+                    print('==============================================\n ==============================================') 
+                    print(id,' : Etude de :',new_tpq.toStr())
+                    print('|sm:',new_tpq.sm)
+                    print('|pm:',new_tpq.pm)
+                    print('|om:',new_tpq.om)
+
+                if not( new_tpq.isDump() ):
+                    # h = hcode(s,p,o)
                     #print(currentTime)
                     trouve = False
                     for (i,bgp) in enumerate(BGP_list):
                         # Si c'est le même client, dans le gap et un TP identique n'a pas déjà été utilisé pour ce BGP
                         if SWEEP_DEBUG_BGP_BUILD : 
-                            print('-----------------------------------')
-                            print('\t Etude avec BGP ',i)
+                            print('-----------------------------------\n\t Etude avec BGP ',i)
                             bgp.print('\t\t\t')
-                        if (client == bgp.client) and (time - bgp.time <= gap) and (h not in bgp.input_set): 
-                            ref_couv = 0
-                            ref_rang = 0
-                            # on regarde si une constante du sujet et ou de l'objet est une injection
-                            for (rang,tp) in  enumerate(bgp.tp_set):
-                                (bid, (bs, bp, bo), bsm, bpm, bom) = tp
-                                if SWEEP_DEBUG_BGP_BUILD : 
-                                    print('_____')
-                                    print('\t\t Comparaison de :',toStr(s,p,o))
-                                    print('\t\t avec le TP :',toStr(bs,bp,bo))
-                                    print('\t\tbsm:',bsm) ; print('\t\tbpm:',bpm); print('\t\tbom:',bom)
 
-                                #On recherche les mappings possibles : s-s, s-p, s-o, etc.
-                                d = None
-                                res = list()
-                                chercher('',(s,p,o), dict({bs:bsm,bp:bpm,bo:bom}), dict(),res)
-                                # print('==='); pprint(res); print('===')
-                                couv = 0
-                                for x in res:
-                                    c = x['nb']
-                                    if c > couv:
-                                        couv = c
-                                        d = x
-
-                                nb_map = 0
-                                nb_eq = 0
-                                if d is not None:# on cherche à éviter d'avoir le même TP
-                                    for (i,j) in ( (s,bs) , (p,bp) , (o,bo)) :
-                                        if (d[i] != i) and isinstance(j,Variable):
-                                            nb_map +=1
-                                        else:
-                                            if (i == j) or (isinstance(i,Variable) and isinstance(j,Variable)):
-                                                # le second opérande pose pb car interdit : ?s1 p ?o1 . ?s1 p ?o2 . :-(
-                                                nb_eq +=1
-                                            else:
-                                                pass
-
-                                if (couv > ref_couv) and (nb_map+nb_eq !=3) : 
-                                    trouve = True
-                                    ref_couv = couv
-                                    ref_d = d
-                                    ref_rang = rang
-                                    ref_id = bid
-                                    break
-
+                        if bgp.canBeCandidate(new_tpq) : 
+                            (trouve, candTP) = bgp.findTP(new_tpq)
                             if trouve:
-                                if SWEEP_DEBUG_BGP_BUILD : print('\t\t ok avec :',toStr(bs,bp,bo) )
-                                (s2, p2, o2) = (ref_d[s],ref_d[p],ref_d[o])
-                                if SWEEP_DEBUG_BGP_BUILD : print('\t\t |-> ',toStr(s2,p2,o2) )
-                                inTP = False
-                                # peut-être que un TP similaire a déjà été utilisé pour une autre valeur... alors pas la peine de le doubler
-                                for  (b2id, (b2s, b2p, b2o), b2sm, b2pm, b2om) in  bgp.tp_set:
-
-                                    (inTP,m) = egal((s2, p2, o2) ,(b2s, b2p, b2o)) 
-                                    # inTP = s2==b2s and p2==b2p and o2==b2o
-                                    if inTP:
-                                        # Il sont vraiment identiques si les variables de jointure sont les mêmes !
-                                        # print('comp:')
-                                        # print(id, s2, p2, o2)
-                                        # print(b2id,b2s,b2p, b2o)
-                                        ok = True
-                                        for j in [s,p,o]:
-                                            if isinstance(ref_d[j],Variable):
-                                                # print(j, '/',ref_d[j],' vs. ', m[ref_d[j]])
-                                                ok = ok and ( ( (j==ref_d[j]) and ((str(b2id).replace("-","_") in str(m[ref_d[j]]) ) or (str(m[ref_d[j]]).startswith('j')) )) 
-                                                              or (ref_d[j]==m[ref_d[j]]) 
-                                                            )
-                                                # print(ok)
-                                        # print('to conclude:',ok)
-
-                                    if inTP and ok : 
-                                        #Il faut ajouter les mappings !
-                                        if SWEEP_DEBUG_BGP_BUILD : 
-                                            print('\t Déjà présent avec ',toStr(b2s, b2p, b2o))
-                                            print('\t MàJ des mappings')
-                                            print('\t\t ',b2sm,'+',sm)
-                                            print('\t\t ',b2pm,'+',pm)
-                                            print('\t\t ',b2om,'+',om)
-                                        b2sm.update(sm)
-                                        b2pm.update(pm)
-                                        b2om.update(om)
-                                        break
-                                if not(inTP):
-                                    # print('=====',s,s2)
-                                    # print('=====',p,p2)
-                                    # print('=====',o,o2)
-                                    ren = dict()
-                                    if (s==ref_d[s]) and isinstance(s,Variable): 
-                                        s2 = Variable("s"+str(id).replace("-","_"))
-                                    elif not(isinstance(s,Variable)) and isinstance(s2,Variable) and (str(ref_id).replace("-","_") in str(s2)) :
-                                        name = Variable("js"+str(ref_rang))
-                                        ren[s2] = name
-                                        s2 = name
-
-                                    if (p==ref_d[p]) and isinstance(p,Variable): 
-                                        p2 = Variable("p"+str(id).replace("-","_"))
-                                    elif not(isinstance(p,Variable)) and isinstance(p2,Variable) and (str(ref_id).replace("-","_") in str(p2)) :
-                                        name = Variable("jp"+str(ref_rang))
-                                        ren[p2]=name
-                                        p2 = name
-
-                                    if (o==ref_d[o]) and isinstance(o,Variable): 
-                                        o2 = Variable("o"+str(id).replace("-","_"))
-                                    elif not(isinstance(o,Variable)) and isinstance(o2,Variable) and (str(ref_id).replace("-","_") in str(o2)) :
-                                        name = Variable("jo"+str(ref_rang))
-                                        ren[o2]=name
-                                        o2 = name
-
-                                    if bs in ren: bs = ren[bs]
-                                    if bp in ren: bp = ren[bp]
-                                    if bo in ren: bo = ren[bo]
-
-                                    bgp.tp_set.append( (id,(s2,p2,o2),sm,pm,om) )
-                                    bgp.tp_set[ref_rang] = (bid, (bs, bp, bo), bsm, bpm, bom)
+                                if SWEEP_DEBUG_BGP_BUILD : 
+                                    print('\t\t ok avec :',tpq.toStr(), '\n\t\t |-> ',candTP.toStr() )
+                                (ok,tp) = bgp.existTP(candTP)
+                                if ok : 
+                                    #Il faut ajouter les mappings !
                                     if SWEEP_DEBUG_BGP_BUILD : 
-                                        print('\t\t Ajout de ',toStr(s2,p2,o2))
-                                        print('\t\t avec de ',toStr(bs,bp,bo))
-                                    bgp.input_set.add(h)
-                                else: 
-                                    pass
+                                        print('\t Déjà présent avec ',toStr(tp.s, tp.p, tp.o))
+                                        print('\t MàJ des mappings')
+                                        print('\t\t ',tp.sm,'+',sm)
+                                        print('\t\t ',tp.pm,'+',pm)
+                                        print('\t\t ',tp.om,'+',om)
+                                    tp.sm.update(sm)
+                                    tp.pm.update(pm)
+                                    tp.om.update(om)
+                                else:
+                                    bgp.tp_set.append( candTP )
+                                    if SWEEP_DEBUG_BGP_BUILD : 
+                                        print('\t\t Ajout de ',new_tpq.toStr(),'\n\t\t avec ',candTP.toStr())
+                                    bgp.input_set.add(new_tpq.sign())
                                 if ctx.optimistic: bgp.time = time
                                 break
                         else: 
-                            if (client == bgp.client) and (time - bgp.time <= gap):
+                            if (new_tpq.client == bgp.client) and (new_tpq.time - bgp.time <= gap):
                                 if SWEEP_DEBUG_BGP_BUILD : print('\t\t Déjà ajouté')
                                 pass
+                    # end for BGP
 
                     # pas trouvé => nouveau BGP ?
                     if not(trouve):
-                        bgp = BGP()     
-                        if isinstance(s,Variable):
-                            s = Variable("s"+str(id).replace("-","_"))
-                        if isinstance(p,Variable):
-                            p = Variable("p"+str(id).replace("-","_"))
-                        if isinstance(o,Variable):
-                            o = Variable("o"+str(id).replace("-","_"))
-                        if SWEEP_DEBUG_BGP_BUILD : print('\t Création de ',toStr(s,p,o),'-> BGP ',len(BGP_list))
-                        bgp.tp_set.append( (id,(s,p,o), sm,pm,om) )
-                        bgp.input_set.add(h)
-                        bgp.time = time
-                        bgp.birthTime = time
-                        bgp.client = client
-                        BGP_list.append(bgp)
+                        if SWEEP_DEBUG_BGP_BUILD : print('\t Création de ',new_tpq.toStr(),'-> BGP ',len(BGP_list))
+                        BGP_list.append(BasicGraphPattern(gap,new_tpq))
 
             # envoyer les trop vieux !
             old = []
             recent = []
             for bgp in BGP_list:
                 # print(currentTime,bgp.time)
-                if currentTime - bgp.time > gap : old.append(bgp)
+                if bgp.isOld() : old.append(bgp)
                 else: recent.append(bgp)
             for bgp in old :  
                 out_queue.put(bgp)
@@ -403,7 +422,7 @@ def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
 
 def testPrecisionRecallBGP(queryList, bgp, gap):
     best = 0
-    test = [ tp for (itp,tp, sm,pm,om) in bgp.tp_set ]
+    test = [ (tp.s, tp.p, tp.o) for tp in bgp.tp_set ]
     # print(test)
     best_precision = 0
     best_recall = 0
@@ -485,7 +504,7 @@ def processValidation(in_queue, ctx):
                         old_bgp.print()
                 if old_bgp is not None:
                     ctx.memory.append( (0,'', old_bgp.birthTime, old_bgp.client, None, old_bgp, 0, 0) )
-                    addBGP2Rank(canonicalize_sparql_bgp([x for (itp,x,sm,pm,om) in old_bgp.tp_set]), '', id, 0,0, ctx.rankingBGPs)
+                    addBGP2Rank(canonicalize_sparql_bgp([(tp.s,tp.p,tp.o) for tp in old_bgp.tp_set]), '', id, 0,0, ctx.rankingBGPs)
 
             elif mode == SWEEP_OUT_QUERY: # dans le cas où le client TPF n'a pas pu exécuter la requête...
                 # suppress query 'queryID'
@@ -506,7 +525,7 @@ def processValidation(in_queue, ctx):
                             old_bgp = testPrecisionRecallBGP(queryList,bgp,gap)
                             if old_bgp is not None:
                                 ctx.memory.append( (0, '',old_bgp.birthTime, old_bgp.client, None, old_bgp, 0, 0) )
-                                addBGP2Rank(canonicalize_sparql_bgp([x for (itp,x,sm,pm,om) in old_bgp.tp_set]), '', id, 0,0, ctx.rankingBGPs)
+                                addBGP2Rank(canonicalize_sparql_bgp([(tp.s,tp.p,tp.o) for tp in old_bgp.tp_set]), '', id, 0,0, ctx.rankingBGPs)
                         else:
                             if SWEEP_DEBUB_PR: 
                                 print('-') 
@@ -541,7 +560,7 @@ def processValidation(in_queue, ctx):
                     assert ip == bgp.client, 'Client Query différent de client BGP'
                     #---
                     addBGP2Rank(canonicalize_sparql_bgp(qbgp), query, id, precision, recall, ctx.rankingQueries)
-                    addBGP2Rank(canonicalize_sparql_bgp([x for (itp,x,sm,pm,om) in bgp.tp_set]), query, id, 0,0, ctx.rankingBGPs)
+                    addBGP2Rank(canonicalize_sparql_bgp([(tp.s,tp.p,tp.o) for tp in bgp.tp_set]), query, id, 0,0, ctx.rankingBGPs)
                 else:
                     if SWEEP_DEBUB_PR: print('Query not assigned')
                     addBGP2Rank(qbgp, query, id, precision, recall, ctx.rankingQueries)
@@ -566,13 +585,13 @@ def processValidation(in_queue, ctx):
             ctx.stat['sumQuality'] += (recall+precision)/2
             if bgp is not None: 
                 if SWEEP_DEBUB_PR: 
-                    print(".\n".join([ toStr(s,p,o) for ((s,p,o), sm,pm,om ) in bgp.tp_set ]))
+                    print(".\n".join([ tp.toStr() for tp in bgp.tp_set ]))
                 ctx.stat['sumSelectedBGP'] += 1
                 #---
                 assert ip == bgp.client, 'Client Query différent de client BGP'
                 #---
                 addBGP2Rank(canonicalize_sparql_bgp(qbgp), query, id, precision, recall, ctx.rankingQueries)
-                addBGP2Rank(canonicalize_sparql_bgp([x for (itp,x,sm,pm,om) in bgp.tp_set]), query, id, 0,0, ctx.rankingBGPs)
+                addBGP2Rank(canonicalize_sparql_bgp([ (tp.s,tp.p,tp.o) for tp in bgp.tp_set]), query, id, 0,0, ctx.rankingBGPs)
             else:
                 if SWEEP_DEBUB_PR: print('Query not assigned')
                 addBGP2Rank(qbgp, query, id, precision, recall, ctx.rankingQueries)
@@ -596,11 +615,11 @@ def addBGP(n,bgp, node_log):
     entry_node.set('logline', '%s' % n)
     request_node = etree.SubElement(entry_node, 'request')
     try:
-        bgp_node = serializeBGP([ x for (x,sm,pm,om,h) in bgp.tp_set])
+        bgp_node = serializeBGP([ (tp.s,tp.p,tp.o) for tp in bgp.tp_set])
         entry_node.insert(1, bgp_node)
         query = 'select * where{ \n'
-        for ( (s,p,o) ,sm,pm,om,h) in bgp.tp_set :
-            query += serialize2string(s) + ' ' + serialize2string(p) + ' ' + serialize2string(o) + ' .\n'
+        for tp in bgp.tp_set :
+            query += serialize2string(tp.s) + ' ' + serialize2string(tp.p) + ' ' + serialize2string(tp.o) + ' .\n'
         query += ' }'
         request_node.text = query
     except Exception as e:
@@ -713,6 +732,10 @@ class SWEEP: # Abstract Class
     def putData(self,i,xs,xp,xo):
         self.dataQueue.put( (i, SWEEP_IN_DATA, (xs, xp, xo)) )
 
+    def putLog(self,entry_id, entry) :
+        # (s,p,o,t,c,sm,pm,om) = entry
+        self.entryQueue.put( (entry_id,entry) )
+
     def delQuery(self,x):
         self.validationQueue.put( (SWEEP_OUT_QUERY, 0, x) )
 
@@ -744,7 +767,7 @@ class SWEEP: # Abstract Class
             writer.writeheader()
             for (id, queryID, t, ip, query, bgp, precision, recall) in self.memory:
                 if bgp is not None :
-                    bgp_txt = ".\n".join([ toStr(s,p,o) for (itp, (s,p,o), sm,pm,om ) in bgp.tp_set ])
+                    bgp_txt = ".\n".join([ tp.toStr() for tp in bgp.tp_set ])
                 else:
                     bgp_txt = "..."
                 s = { 'id':id, 'qID':queryID, 'time':t, 'ip':ip, 'query':query, 'bgp':bgp_txt, 'precision':precision, 'recall':recall }
@@ -755,5 +778,20 @@ class SWEEP: # Abstract Class
 #==================================================
 if __name__ == "__main__":
     print("main sweep")
+    gap = dt.timedelta(minutes=1)
+    tpq1 = TriplePatternQuery(Variable('s'),URIRef('http://exemple.org/p1'),Literal('2'),now(),'Client2',[URIRef('http://exemple.org/test1'),URIRef('http://exemple.org/test2')],[],[])
+    tpq1.renameVars(1)
+    print(tpq1.toString())
+    tpq2 = TriplePatternQuery(URIRef('http://exemple.org/test1'),URIRef('http://exemple.org/p2'),Literal('3'),now(),'2',['a','b'],[],[])
+    tpq2.renameVars(2)
+    print(tpq2.toString())
+    tpq3 = TriplePatternQuery(URIRef('http://exemple.org/test2'),URIRef('http://exemple.org/p2'),Literal('4'),now(),'2',['a','b'],[],[])
+    tpq3.renameVars(3)
+    print(tpq3.toString())
 
+    bgp = BasicGraphPattern(gap,tpq1)
+    bgp.print()
 
+    print(tpq2.nestedLoopOf(tpq1))
+    (t,tp) = bgp.findTP(tpq2)
+    if t: print(tp.toString())

@@ -42,7 +42,7 @@ def existFile(f):
 
 #==================================================
 def now():
-	return dt.datetime.now()
+	return fromISO(dt.datetime.utcnow().isoformat())
 
 #==================================================
 def date2str(date):

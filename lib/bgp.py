@@ -646,7 +646,7 @@ def calcPrecisionRecall(BGPref, BGPtst):
   return m # return (precision, recall, {TP of BGPtst in BGPref}, dict of mapping of variables )
 
 def isSGO(g1, g2):
-    GM = nx.isomorphism.GraphMatcher(g2, g1 ,
+    GM = nx.isomorphism.DiGraphMatcher(g2, g1 ,
                                      #node_match=nm2,
                                      #node_match=iso.categorical_node_match('type', ''), 
                                      #edge_match=em2,

@@ -16,7 +16,7 @@ import datetime as dt
 import argparse
 import html
 
-from tools.tools import now
+from tools.tools import now, fromISO
 from operator import itemgetter
 
 from lxml import etree  # http://lxml.de/index.html#documentation
@@ -32,6 +32,8 @@ from flask import Flask, render_template, request, jsonify
 
 from urllib.parse import urlparse, unquote_plus
 from configparser import ConfigParser, ExtendedInterpolation
+
+from rdflib import Variable
 
 import requests as http
 
@@ -58,6 +60,7 @@ class Context(object):
         self.nbClientError = 0
         self.nbEmpty = 0
         self.qm = QueryManager(modeStat = False)
+        self.entry_id = 0
 
 ctx = Context()
 
@@ -148,105 +151,50 @@ def sweep():
 
     rep = '<h1>Information</h1><table><tr><td>'
 
-    # rep += '<h1>SWEEP parameters</h1>'
     rep += '<table  cellspacing="1" border="1" cellpadding="2"><thead>'
     rep += '<td>Gap (hh:mm:ss)</td>'
-    # rep += '<td>Time out</td>'
-    # rep += '<td>Opt</td>'
     rep += '</thead><tr>'
     rep += '<td>%s</td>'%(dt.timedelta(minutes= ctx.gap))
-    # rep += '<td>%s</td>'%(dt.timedelta(minutes= ctx.to))
-    # rep += '<td>%s</td>'%(str(ctx.opt))
     rep += '</tr></table>'
 
     rep += '</td><td>'
 
-    # rep += '<h1>Global measures</h1>'
     rep += '<table cellspacing="1" border="1" cellpadding="2"><thead>'
     rep += '<td>Evaluated Queries</td>'
-    # rep += '<td>Nb Cancelled Queries</td>'
-    # rep += '<td>Nb Empty Queries</td>'
-    # rep += '<td>Nb Timeout Queries</td>'
-    # rep += '<td>Nb Bad formed Queries</td>'
-    # rep += '<td>Nb TPF Client Error</td>'
-    # rep += '<td>Nb TPF Client Query Error</td>'
-    # rep += '<td>Nb Other query Error</td>'
 
     rep += '<td>BGP</td><td>TPQ</td>'
     rep += '</thead><tr>'
     rep += '<td>%d / %d</td>'%(nb,ctx.nbQueries)
-    # rep += '<td>%d</td>'%(ctx.nbCancelledQueries)
-    # rep += '<td>%d</td>'%(ctx.nbEmpty)
-    # rep += '<td>%d</td>'%(ctx.nbTO)
-    # rep += '<td>%d</td>'%(ctx.nbQBF)
-    # rep += '<td>%d</td>'%(ctx.nbClientError)
-    # rep += '<td>%d</td>'%(ctx.nbEQ)
-    # rep += '<td>%d</td>'%(ctx.nbOther)
 
     rep += '<td>%d</td><td>%d</td>'%(nbbgp,ctx.nbEntries)
     rep += '</tr></table>'
     rep += '</td><td>'
 
-    # rep += '<table cellspacing="1" border="1" cellpadding="2"><thead>'
-    # rep += '<td>Avg Precision</td>'
-    # rep += '<td>Avg Recall</td>'
-    # # rep += '<td>Avg Quality</td>'
-    # # rep += '<td>Acuteness</td>'
-    # rep += '</thead><tr>'
-
-    # rep += '<td>%2.3f</td><td>%2.3f</td>'%(avgPrecision,avgRecall)
-    # # rep += '<td>%2.3f</td><td>%2.3f</td>'%(avgQual,Acuteness)
-    # rep += '</tr></table>'
-
     rep += '</td></tr></table>\n'
-
-
-
-
-    # rep += '<hr size="2" width="100" align="CENTER" />'
 
     rep += '<h1>Deduced BGPs</h1><p>('+str(ctx.nlast)+' more recents)</p><table cellspacing="1" border="1" cellpadding="5"  width="100%">\n'
     rep += '<thead><td></td><td>ip</td><td>time</td><td width="35%">bgp</td><td  width="45%">Original query</td><td>Precision</td><td>Recall</td>'
-    # rep += '<td>Quality</td>'
     rep += '</thead>\n'
-    # for (i,idQ, t,ip,query,bgp,precision,recall) in ctx.sweep.memory[-1*ctx.nlast:] :
     nb = len(ctx.sweep.memory)
     for j in range(min(nb,ctx.nlast)):
         (i,idQ, t,ip,query,bgp,precision,recall) = ctx.sweep.memory[nb-j-1]
         if i==0:
             rep +='<tr><td>'+str(nb-j)+'</td><td>'+bgp.client+'</td><td>'+str(bgp.time)+'</td><td>'
-            # for (s,p,o) in simplifyVars([tp for (itp,tp,sm,pm,om) in bgp.tp_set]):
-            for (s,p,o) in [tp for (itp,tp,sm,pm,om) in bgp.tp_set]:
+            for (s,p,o) in [(tp.s,tp.p,tp.o) for tp in bgp.tp_set]:
                 rep += html.escape(toStr(s,p,o))+' . <br/>'
             rep += '</td><td>No query assigned</td><td></td><td></td>'
-            # rep += '<td></td>'
             rep += '</tr>'
         else:
             rep +='<tr><td>'+str(nb-j)+'</td><td>'+ip+'</td><td>'+str(t)+'</td><td>'
             if bgp is not None:
-                # for (s,p,o) in simplifyVars([tp for (itp,tp,sm,pm,om) in bgp.tp_set]):
-                for (s,p,o) in [tp for (itp,tp,sm,pm,om) in bgp.tp_set]:
+                for (s,p,o) in [(tp.s,tp.p,tp.o)  for tp in bgp.tp_set]:
                     rep += html.escape(toStr(s,p,o))+' . <br/>'
             else:
                 rep += 'No BGP assigned !'
             rep += '</td><td>'+idQ+'<br/>'+html.escape(query)+'</td><td>%2.3f</td><td>%2.3f</td>'%(precision,recall)    # .replace('\n','<br/>')
-            # rep += '<td>%2.3f</td>'%((precision+recall)/2)
             rep += '</tr>'
     rep += '</table>'
     return rep
-
-# @app.route('/delquery', methods=['post','get'])
-# def processDelQuery():
-#     if request.method == 'POST':
-#         ip = request.remote_addr
-#         # data = request.form['data']
-#         ctx.sweep.stat['nbQueries'] -= 1
-#         ctx.nbCancelledQueries += 1
-#         # ctx.nbQueries -= 1
-#         return jsonify(result=True)
-#     else:
-#         print('"delquery" not implemented for HTTP GET')
-#         return jsonify(result=False)
 
 @app.route('/run', methods=['get'])
 def doRun():
@@ -330,7 +278,10 @@ def processQuery():
             ip = q.get('client')
 
             query = q.text
-            time = now()# fromISO(q.attrib['time'])
+            time = fromISO(q.attrib['time']) # now()# 
+            print('@ ', time)
+            # print('fromISO ', fromISO(q.attrib['time']) )
+            print('now', now())
 
             if query.startswith('#bgp-list#') :
                 t = query.split('\n')
@@ -374,12 +325,14 @@ def processQuery():
         print('"query" not implemented for HTTP GET')
         return jsonify(result=False)
 
+# data 2017-10-19T09:18:03.231Z
+
 @app.route('/data', methods=['post','get'])
 def processData():
     if request.method == 'POST':
         data = request.form['data']
         i = request.form['no']
-        time = request.form['time']
+        time = fromISO(request.form['time'])
 
         print(i,time)
         # print('Receiving data:',data)
@@ -400,6 +353,10 @@ def processData():
         try:
             tree = etree.parse(StringIO(data), ctx.parser)
             ctx.nbEntries += 1
+            entry = ()
+            currentTime = now()
+            entry_id = ctx.entry_id
+            ctx.entry_id += 1
             for e in tree.getroot():
                 if e.tag == 'e':
                     if e[0].get('type')=='var' : e[0].set('val','s')
@@ -408,14 +365,27 @@ def processData():
                     s = unSerialize(e[0])
                     p = unSerialize(e[1])
                     o = unSerialize(e[2])
-                    ctx.sweep.putEntry(i,s,p,o,time,client)
+
+                    currentTime = now()
+                    entry = (s,p,o,time,client,set(),set(),set())
+
+                    # ctx.sweep.putEntry(i,s,p,o,time,client)
                     print('new TPQ : ',toStr(s,p,o))
 
                 elif e.tag == 'd':
                     xs = unSerialize(e[0])
                     xp = unSerialize(e[1])
                     xo = unSerialize(e[2])
-                    ctx.sweep.putData(i, xs, xp, xo)
+
+                    (s,p,o,t,c,sm,pm,om) = entry
+                    # currentTime = max(currentTime,t) + dt.timedelta(microseconds=1)
+                    if isinstance(s,Variable): sm.add(xs)
+                    if isinstance(p,Variable): pm.add(xp)
+                    if isinstance(o,Variable): om.add(xo)
+
+                    entry = (s,p,o,t,c,sm,pm,om)
+
+                    # ctx.sweep.putData(i, xs, xp, xo)
                     # print('new data : ',toStr(xs,xp,xo))
 
                 elif e.tag == 'm':
@@ -427,7 +397,8 @@ def processData():
                 else:
                     pass
 
-            ctx.sweep.putEnd(i)
+            # ctx.sweep.putEnd(i)
+            ctx.sweep.putLog(entry_id,entry)
 
             return jsonify(result=True)
         except Exception as e:

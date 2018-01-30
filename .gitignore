@@ -9,3 +9,10 @@ tools/__pycache__/*
 *.csv
 
 .spyproject/*
+res1
+resPB
+resPB copie
+res
+__pycache__/sweep.cpython-36.pyc
+.vscode/launch.json
+.vscode/settings.json
