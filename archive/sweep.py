@@ -249,7 +249,20 @@ class BasicGraphPattern:
 
             (couv, d) = ntpq.nestedLoopOf(tpq)
 
-            if (couv > ref_couv) :
+            # nb_map = 0
+            # nb_eq = 0
+            # if d is not None:  # on cherche à éviter d'avoir le même TP
+            #     for (i, j) in ((ntpq.s, tpq.s), (ntpq.p, tpq.p), (ntpq.o, tpq.o)):
+            #         if (d[i] != i) and isinstance(j, Variable):
+            #             nb_map += 1
+            #         else:
+            #             if (i == j) or (isinstance(i, Variable) and isinstance(j, Variable)):
+            #                 # le second opérande pose pb car interdit : ?s1 p ?o1 . ?s1 p ?o2 . :-(
+            #                 nb_eq += 1
+            #             else:
+            #                 pass
+
+            if (couv > ref_couv) :#and (nb_map+nb_eq != 3):
                 trouve = True
                 ref_couv = couv
                 break
