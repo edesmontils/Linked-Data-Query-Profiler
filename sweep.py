@@ -106,7 +106,7 @@ class TriplePatternQuery(TripplePattern):
             o = Variable("o")
         else:
             o = self.o
-        return hash(toStr(s, p, o))  # hcode(s,p,o)
+        return hash(toStr(s, p, o))
 
     def nestedLoopOf(self, tpq):
         assert isinstance(
@@ -116,7 +116,7 @@ class TriplePatternQuery(TripplePattern):
         res = list()
         chercher('', (self.s, self.p, self.o), dict(
             {tpq.s: tpq.sm, tpq.p: tpq.pm, tpq.o: tpq.om}), dict(), res)
-        # print('==='); pprint(res); print('===')
+        # print('==='); print(res); print('===')
         couv = 0
         for x in res:
             if x['nb'] > couv:
@@ -128,9 +128,9 @@ class TriplePatternQuery(TripplePattern):
 
 # appel chercher( (s,p,o),{bs:bsm,bp:bpm,bo:bom}, dict, set )
 def chercher(tab, ref, tp, d, res):
-    #print(tab,'===> Ref:',ref); print(tab,'---> tp:',tp); print(tab,'---> d:',d); print(tab,'---> res:',res)
+    # print(tab,'===> Ref:',ref); print(tab,'---> tp:',tp); print(tab,'---> d:',d); print(tab,'---> res:',res)
     if len(ref) == 0:
-        #print(tab,'|--> réponse !')
+        # print(tab,'|--> réponse !') 
         ok = 0
         for (i, j) in d.items():
             if i != j:
@@ -143,28 +143,29 @@ def chercher(tab, ref, tp, d, res):
         i = ref[0]
         reste = ref[1:]
         if isinstance(i, Variable):
-            #print(tab,'|--> Variable !')
+            # print(tab,'|--> Variable !')
             d[i] = i
             chercher(tab+'\t', reste, tp, d, res)
             d.pop(i)
         else:
             for (j, bj) in tp.copy().items():
                 if i in bj:
-                    #print(tab,'|--> choix =>',i,j)
+                    # print(tab,'|--> choix =>',i,j)
                     d[i] = j
                     tp.pop(j)
                     chercher(tab+'\t', reste, tp, d, res)
                     tp[j] = bj
                     d.pop(i)
                 else:
-                    #print(tab,'|--> pas bon =>',i,j)
+                    # print(tab,'|--> pas bon =>',i,j)
                     pass
             d[i] = i
-            #print(tab,'|--> i==i:',i)
+            # print(tab,'|--> i==i:',i)
             chercher(tab+'\t', reste, tp, d, res)
             d.pop(i)
 
 #==================================================
+
 
 class BasicGraphPattern:
     def __init__(self, gap=None, tpq=None):
@@ -232,12 +233,13 @@ class BasicGraphPattern:
             tpq, TriplePatternQuery), "BasicGraphPattern.canBeCandidate : Pb type TPQ"
         return (tpq.client == self.client) and (tpq.time - self.time <= self.gap) and (tpq.sign() not in self.input_set)
 
-    def findTP(self, ntpq):
+    def findNestedLoop(self, ntpq):
         assert isinstance(
             ntpq, TriplePatternQuery), "BasicGraphPattern.findTP : Pb type TPQ"
         ref_couv = 0
         trouve = False
-        # on regarde si une constante du sujet et ou de l'objet est une injection
+        # on regarde si une constante du sujet et ou de l'objet est une injection 
+        # provenant d'un tpq existant (par son résultat)
         for (_, tpq) in enumerate(self.tp_set):
             if SWEEP_DEBUG_BGP_BUILD:
                 print('_____', '\n\t\t Comparaison de :',
@@ -247,26 +249,27 @@ class BasicGraphPattern:
 
             (couv, d) = ntpq.nestedLoopOf(tpq)
 
-            nb_map = 0
-            nb_eq = 0
-            if d is not None:  # on cherche à éviter d'avoir le même TP
-                for (i, j) in ((ntpq.s, tpq.s), (ntpq.p, tpq.p), (ntpq.o, tpq.o)):
-                    if (d[i] != i) and isinstance(j, Variable):
-                        nb_map += 1
-                    else:
-                        if (i == j) or (isinstance(i, Variable) and isinstance(j, Variable)):
-                            # le second opérande pose pb car interdit : ?s1 p ?o1 . ?s1 p ?o2 . :-(
-                            nb_eq += 1
-                        else:
-                            pass
+            # nb_map = 0
+            # nb_eq = 0
+            # if d is not None:  # on cherche à éviter d'avoir le même TP
+            #     for (i, j) in ((ntpq.s, tpq.s), (ntpq.p, tpq.p), (ntpq.o, tpq.o)):
+            #         if (d[i] != i) and isinstance(j, Variable):
+            #             nb_map += 1
+            #         else:
+            #             if (i == j) or (isinstance(i, Variable) and isinstance(j, Variable)):
+            #                 # le second opérande pose pb car interdit : ?s1 p ?o1 . ?s1 p ?o2 . :-(
+            #                 nb_eq += 1
+            #             else:
+            #                 pass
 
-            if (couv > ref_couv) and (nb_map+nb_eq != 3):
+            if (couv > ref_couv) :#and (nb_map+nb_eq != 3):
                 trouve = True
                 ref_couv = couv
                 break
         # end for tpq
 
         if trouve:
+            # on calcule le TPQ possible
             candTP = TriplePatternQuery(
                 d[ntpq.s], d[ntpq.p], d[ntpq.o], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
         else:
@@ -401,7 +404,7 @@ def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
                         if bgp.canBeCandidate(new_tpq):
                             # Si c'est le même client, dans le gap et un TP identique,
                             #  n'a pas déjà été utilisé pour ce BGP
-                            (trouve, candTP) = bgp.findTP(new_tpq)
+                            (trouve, candTP) = bgp.findNestedLoop(new_tpq)
                             if trouve:
                                 # le nouveau TPQ pourrait être produit par un nested loop... on teste alors
                                 # sa "forme d'origine" 'candTP'
@@ -884,10 +887,12 @@ if __name__ == "__main__":
     tpq3.renameVars(3)
     print(tpq3.toString())
 
+    print('\n Début')
     bgp = BasicGraphPattern(gap, tpq1)
     bgp.print()
 
     print(tpq2.nestedLoopOf(tpq1))
-    (t, tp) = bgp.findTP(tpq2)
+    (t, tp) = bgp.findNestedLoop(tpq2)
     if t:
         print(tp.toString())
+    print('Fin')
