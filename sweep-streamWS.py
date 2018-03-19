@@ -84,7 +84,7 @@ def bo():
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td>'
     ctx.sweep.rankingBGPs.sort(key=itemgetter(1), reverse=True)
-    for (bgp, freq, query, lines, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
+    for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
         rep += '<tr>'
         rep += '<td>'
         for (s,p,o) in simplifyVars(bgp):
@@ -98,7 +98,7 @@ def bo():
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
     ctx.sweep.rankingQueries.sort(key=itemgetter(1), reverse=True)
-    for (bgp, freq, query, lines, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
+    for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
         rep += '<tr>'
         rep += '<td>'
         for (s,p,o) in simplifyVars(bgp):
@@ -115,19 +115,19 @@ def bo():
 @app.route('/pr')
 def doPR():
     nb = ctx.sweep.stat['nbQueries']
-    nbbgp = ctx.sweep.stat['nbBGP']
+    #nbbgp = ctx.sweep.stat['nbBGP']
     if nb>0:
         avgPrecision = ctx.sweep.stat['sumPrecision']/nb
         avgRecall = ctx.sweep.stat['sumRecall']/nb
-        avgQual = ctx.sweep.stat['sumQuality']/nb
+        #avgQual = ctx.sweep.stat['sumQuality']/nb
     else:
         avgPrecision = 0
         avgRecall = 0
-        avgQual = 0
-    if nbbgp>0 :
-        Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
-    else:
-        Acuteness = 0
+        #avgQual = 0
+    #if nbbgp>0 :
+    #    Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
+    #else:
+    #    Acuteness = 0
 
     return jsonify(result=(avgPrecision,avgRecall))
 
@@ -136,18 +136,18 @@ def sweep():
     ctx.cpt += 1
     nb = ctx.sweep.stat['nbQueries']
     nbbgp = ctx.sweep.stat['nbBGP']
-    if nb>0:
-        avgPrecision = ctx.sweep.stat['sumPrecision']/nb
-        avgRecall = ctx.sweep.stat['sumRecall']/nb
-        avgQual = ctx.sweep.stat['sumQuality']/nb
-    else:
-        avgPrecision = 0
-        avgRecall = 0
-        avgQual = 0
-    if nbbgp>0 :
-        Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
-    else:
-        Acuteness = 0
+    #if nb>0:
+        #avgPrecision = ctx.sweep.stat['sumPrecision']/nb
+        #avgRecall = ctx.sweep.stat['sumRecall']/nb
+        #avgQual = ctx.sweep.stat['sumQuality']/nb
+    #else:
+        #avgPrecision = 0
+        #avgRecall = 0
+        #avgQual = 0
+    #if nbbgp>0 :
+    #    Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
+    #else:
+    #    Acuteness = 0
 
     rep = '<h1>Information</h1><table><tr><td>'
 
@@ -206,7 +206,7 @@ def doRun():
 def processInform():
     if request.method == 'POST':
 
-        ip = request.remote_addr
+        #ip = request.remote_addr
 
         errtype = request.form['errtype']
         queryNb = request.form['no']
@@ -353,8 +353,8 @@ def processData():
         try:
             tree = etree.parse(StringIO(data), ctx.parser)
             ctx.nbEntries += 1
-            entry = ()
-            currentTime = now()
+            entry = (None, None, None, now(), None, set(),set(),set())
+            #currentTime = now()
             entry_id = ctx.entry_id
             ctx.entry_id += 1
             for e in tree.getroot():
@@ -366,7 +366,7 @@ def processData():
                     p = unSerialize(e[1])
                     o = unSerialize(e[2])
 
-                    currentTime = now()
+                    #currentTime = now()
                     entry = (s,p,o,time,client,set(),set(),set())
 
                     # ctx.sweep.putEntry(i,s,p,o,time,client)
