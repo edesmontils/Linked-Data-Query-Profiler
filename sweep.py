@@ -42,7 +42,7 @@ SWEEP_PURGE = -3
 SWEEP_ENTRY_TIMEOUT = 0.8  # percentage of the gap
 SWEEP_PURGE_TIMEOUT = 0.1  # percentage of the gap
 
-SWEEP_DEBUG_BGP_BUILD = False
+SWEEP_DEBUG_BGP_BUILD = True
 SWEEP_DEBUB_PR = False
 
 #==================================================
@@ -50,6 +50,16 @@ SWEEP_DEBUB_PR = False
 
 def toStr(s, p, o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
+
+def listToStr(l) :
+    s = [serialize2string(s) for s in l]
+    return s
+
+def mapValues(di,i,j) :
+    if (di != i) and isinstance(j, Variable):
+        return i
+    else:
+        return None 
 
 #==================================================
 
@@ -81,6 +91,9 @@ class TriplePatternQuery(TripplePattern):
         super(TriplePatternQuery, self).__init__(s, p, o)
         (self.time, self.client, self.sm, self.pm,
          self.om) = (time, client, sm, pm, om)
+        self.su = set()
+        self.pu = set()
+        self.ou = set()
 
     def isDump(self):  # tp is <?s ?p ?o> ?
         return isinstance(self.s, Variable) and isinstance(self.p, Variable) and isinstance(self.o, Variable)
@@ -115,7 +128,7 @@ class TriplePatternQuery(TripplePattern):
         d = None
         res = list()
         chercher('', (self.s, self.p, self.o), dict(
-            {tpq.s: tpq.sm, tpq.p: tpq.pm, tpq.o: tpq.om}), dict(), res)
+            {tpq.s: (tpq.sm,tpq.su), tpq.p: (tpq.pm,tpq.pu), tpq.o: (tpq.om,tpq.ou)}), dict(), res)
         # print('==='); print(res); print('===')
         couv = 0
         for x in res:
@@ -148,13 +161,13 @@ def chercher(tab, ref, tp, d, res):
             chercher(tab+'\t', reste, tp, d, res)
             d.pop(i)
         else:
-            for (j, bj) in tp.copy().items():
-                if i in bj:
+            for (j, (bj,cj)) in tp.copy().items():
+                if (i in bj):# and (i not in cj):
                     # print(tab,'|--> choix =>',i,j)
                     d[i] = j
                     tp.pop(j)
                     chercher(tab+'\t', reste, tp, d, res)
-                    tp[j] = bj
+                    tp[j] = (bj,cj)
                     d.pop(i)
                 else:
                     # print(tab,'|--> pas bon =>',i,j)
@@ -205,8 +218,9 @@ class BasicGraphPattern:
         if SWEEP_DEBUG_BGP_BUILD:
             print('\t Déjà présent avec ', toStr(tp.s, tp.p, tp.o))
             print('\t MàJ des mappings')
-            print('\t\t ', tp.sm, '+', ntpq.sm, '\n\t\t ', tp.pm,
-                  '+', ntpq.pm, '\n\t\t ', tp.om, '+', ntpq.om)
+            print(  '\t\t ', listToStr(tp.sm), '+', listToStr(ntpq.sm), 
+                    '\n\t\t ', listToStr(tp.pm), '+', listToStr(ntpq.pm), 
+                    '\n\t\t ', listToStr(tp.om), '+', listToStr(ntpq.om) )
         tp.sm.update(ntpq.sm)
         tp.pm.update(ntpq.pm)
         tp.om.update(ntpq.om)
@@ -238,41 +252,68 @@ class BasicGraphPattern:
             ntpq, TriplePatternQuery), "BasicGraphPattern.findTP : Pb type TPQ"
         ref_couv = 0
         trouve = False
+        fromTP = None
+        candTP = None
+        mapVal = (None, None, None)
         # on regarde si une constante du sujet et ou de l'objet est une injection 
         # provenant d'un tpq existant (par son résultat)
         for (_, tpq) in enumerate(self.tp_set):
             if SWEEP_DEBUG_BGP_BUILD:
                 print('_____', '\n\t\t Comparaison de :',
                       ntpq.toStr(), '\n\t\t avec le TP :', tpq.toStr())
-                print('\t\tbsm:', tpq.sm, '\n\t\tbpm:',
-                      tpq.pm, '\n\t\tbom:', tpq.om)
+                print('\t\tbsm:', listToStr(tpq.sm), '\n\t\t\tbsu:', listToStr(tpq.su),
+                      '\n\t\tbpm:', listToStr(tpq.pm), '\n\t\t\tbpu:', listToStr(tpq.pu),
+                      '\n\t\tbom:', listToStr(tpq.om), '\n\t\t\tbou:', listToStr(tpq.ou),)
 
             (couv, d) = ntpq.nestedLoopOf(tpq)
+            #couv : nombre de mappings trouvés (hypothèse de double injection)
+            #d : indique les "constantes" de ntpq qui font l'objet d'injection 
+            #    par tpq (et la variable de celui-ci)
 
-            if (couv > ref_couv) :
-                trouve = True
-                ref_couv = couv
-                break
+            # nb_map = 0
+            # nb_eq = 0
+            # if d is not None:  # on cherche à éviter d'avoir le même TP
+            #     for (i, j) in ((ntpq.s, tpq.s), (ntpq.p, tpq.p), (ntpq.o, tpq.o)):
+            #         if (d[i] != i) and isinstance(j, Variable):
+            #             nb_map += 1
+            #         else:
+            #             if (i == j) or (isinstance(i, Variable) and isinstance(j, Variable)):
+            #                 # le second opérande pose pb car interdit : ?s1 p ?o1 . ?s1 p ?o2 . :-(
+            #                 nb_eq += 1
+            #             else:
+            #                 pass
+
+            if (couv > ref_couv):# and (nb_map+nb_eq != 3) :
+                # on prend les cas où il y a le plus grand nombre d'injections. 
+                # doutes sur le fait qu'il peut y en avoir plusieurs...
+                # on calcule le TPQ possible
+                ctp = TriplePatternQuery(d[ntpq.s], d[ntpq.p], d[ntpq.o], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
+                (inTP, _) = ctp.equal(tpq)
+                if not(inTP):
+                    trouve = True
+                    ref_couv = couv
+                    fromTP = tpq
+                    candTP = ctp
+                    mapVal = mapValues(d[ntpq.s],ntpq.s,tpq.s), mapValues(d[ntpq.p],ntpq.p,tpq.p), mapValues(d[ntpq.o],ntpq.o,tpq.o)
+                    break
         # end for tpq
 
-        if trouve:
-            # on calcule le TPQ possible
-            candTP = TriplePatternQuery(
-                d[ntpq.s], d[ntpq.p], d[ntpq.o], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
-        else:
-            candTP = None
-        return (trouve, candTP)
+        return (trouve, candTP,fromTP, mapVal)
 
-    def existTP(self, candtp):
+    def existTP(self, candtp,fromTP):
         inTP = False
         tp = None
-        # peut-être que un TP similaire a déjà été utilisé pour une autre valeur... alors pas la peine de le doubler
+        # peut-être que un TP similaire a déjà été utilisé pour une autre valeur... 
+        # alors pas la peine de le doubler
         for tp in self.tp_set:
             (inTP, _) = candtp.equal(tp)
             if inTP:
-                break
+                (inTP2, _) = fromTP.equal(tp)
+                if not(inTP2):
+                    break
+                else:
+                    inTP = False
         return (inTP, tp)
-
 
 #==================================================
 
@@ -374,10 +415,10 @@ def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
 
                 if SWEEP_DEBUG_BGP_BUILD:
                     print(
-                        '==============================================\n ==============================================')
-                    print(id, ' : Etude de :', new_tpq.toStr())
-                    print('|sm:', new_tpq.sm, '\n|pm:',
-                          new_tpq.pm, '\n|om:', new_tpq.om)
+                        '============================================== ',id,' ==============================================')
+                    print('Etude de :', new_tpq.toStr())
+                    print('|sm:', listToStr(new_tpq.sm), '\n|pm:',
+                          listToStr(new_tpq.pm), '\n|om:', listToStr(new_tpq.om))
 
                 if not(new_tpq.isDump()):
                     trouve = False
@@ -391,25 +432,30 @@ def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
                         if bgp.canBeCandidate(new_tpq):
                             # Si c'est le même client, dans le gap et un TP identique,
                             #  n'a pas déjà été utilisé pour ce BGP
-                            (trouve, candTP) = bgp.findNestedLoop(new_tpq)
+                            (trouve, candTP,fromTP,mapVal) = bgp.findNestedLoop(new_tpq)
                             if trouve:
                                 # le nouveau TPQ pourrait être produit par un nested loop... on teste alors
                                 # sa "forme d'origine" 'candTP'
                                 if SWEEP_DEBUG_BGP_BUILD:
-                                    print('\t\t ok avec :', new_tpq.toStr(),
+                                    print('\t\t ok avec :', new_tpq.toStr(),' sur ',mapVal,
                                           '\n\t\t |-> ', candTP.toStr())
-                                (ok, tp) = bgp.existTP(candTP)
+                                (ok, tp) = bgp.existTP(candTP,fromTP)
                                 if ok:
-                                    # La forme exsite déjà. Il faut ajouter les mappings !
+                                    # La forme existe déjà. Il faut ajouter les mappings !
+                                    # mais il faut que ce ne soit pas celui qui a injecté !
                                     bgp.update(tp, new_tpq)
                                 else:  # C'est un nouveau TPQ du BGP !
                                     if SWEEP_DEBUG_BGP_BUILD:
                                         print('\t\t Ajout de ', new_tpq.toStr(
                                         ), '\n\t\t avec ', candTP.toStr())
                                     bgp.add(candTP, new_tpq.sign())
+                                (vs,vp,vo) = mapVal
+                                if vs is not None: fromTP.su.add(vs)
+                                if vp is not None: fromTP.pu.add(vp)
+                                if vo is not None: fromTP.ou.add(vo)
                                 if ctx.optimistic:
                                     bgp.time = time
-                                break
+                                break #on en a trouvé un bon... on arrête de chercher !
                         else:
                             if (new_tpq.client == bgp.client) and (new_tpq.time - bgp.time <= gap):
                                 if SWEEP_DEBUG_BGP_BUILD:
@@ -471,9 +517,10 @@ def testPrecisionRecallBGP(queryList, bgp, gap):
 
         if (ip == bgp.client) and (bgp.birthTime >= time) and (bgp.birthTime - time <= gap):
             (precision2, recall2, _, _) = calcPrecisionRecall(qbgp, test)
-            # (preprecision2*recall2 > precision*recall:
-            if (precision2 > precision) or ((precision2 == precision) and (recall2 > recall)):
-                if (precision2 > best_precision) or ((precision2 == best_precision) and (recall2 > best_recall)):
+            if precision2*recall2 > precision*recall:
+            #if (precision2 > precision) or ((precision2 == precision) and (recall2 > recall)):
+                if precision2*recall2 > best_precision*best_recall:
+                #if (precision2 > best_precision) or ((precision2 == best_precision) and (recall2 > best_recall)):
                     best = i
                     best_precision = precision2
                     best_recall = recall2
@@ -879,7 +926,7 @@ if __name__ == "__main__":
     bgp.print()
 
     print(tpq2.nestedLoopOf(tpq1))
-    (t, tp) = bgp.findNestedLoop(tpq2)
+    (t, tp,fTp,mapVal) = bgp.findNestedLoop(tpq2)
     if t:
         print(tp.toString())
     print('Fin')

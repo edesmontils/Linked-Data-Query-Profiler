@@ -334,8 +334,8 @@ def processData():
         i = request.form['no']
         time = fromISO(request.form['time'])
 
-        print(i,time)
-        # print('Receiving data:',data)
+        #print(i,time)
+        # #print('Receiving data:',data)
 
         ip = request.remote_addr
         ip2 = request.form['ip']
@@ -348,7 +348,7 @@ def processData():
         elif "::ffff:" in client:
             client = client[7:]
 
-        print('DATA - ip-remote:',ip,' ip-post:',ip2, ' choix:',client)
+        #print('DATA - ip-remote:',ip,' ip-post:',ip2, ' choix:',client)
 
         try:
             tree = etree.parse(StringIO(data), ctx.parser)
