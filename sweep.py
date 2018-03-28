@@ -25,6 +25,8 @@ from lib.bgp import serialize2string, egal, calcPrecisionRecall, canonicalize_sp
 
 from collections import OrderedDict
 
+from functools import reduce
+
 #==================================================
 
 SWEEP_IN_ENTRY = 1
@@ -136,6 +138,33 @@ class TriplePatternQuery(TripplePattern):
                 couv = x['nb']
                 d = x
         return (couv, d)
+
+    def nestedLoopOf2(self,baseTPQ):
+        # 1:sp->sp 2:so->so 3:s->s 4:so->os 5:s->o 6:o->s 8:po->po 9:p->p
+        # 0/1/2/3 ->(0/1/2/3,0/1/2/3,0/1/2/3)
+        nl = ( 0 , (0,0,0) )
+        base = (None,baseTPQ.s,baseTPQ.p,baseTPQ.o)
+        if  self.s in baseTPQ.sm: 
+            if self.p in baseTPQ.pm: nl = ( 2 , (1,2,0) )
+            elif self.o in baseTPQ.om: nl = ( 2 , (1,0,3) )
+            else: nl = ( 1 , (1,0,0) )
+        elif self.s in baseTPQ.om:
+            if self.o in baseTPQ.sm: nl = ( 2 , (3,0,1) )
+            else: nl = ( 1 , (3,0,0) )
+        elif self.o in baseTPQ.sm: nl = ( 1 , (0,0,1) )
+        elif self.p in baseTPQ.pm:
+            if self.o in baseTPQ.om: nl = ( 2 , (0,2,3) )
+            else: nl = ( 1 , (0,2,0) )
+        (couv,injection) = nl
+        # print('injection:',injection)
+        return ( couv , 
+                { 's':doInjection(base,injection[0],self.s),  
+                  'p':doInjection(base,injection[1],self.p),
+                  'o':doInjection(base,injection[2],self.o) } )
+
+def doInjection(base, injection, val) :
+    if injection > 0 : return base[injection]
+    else: return val
 
 #==================================================
 
@@ -265,7 +294,7 @@ class BasicGraphPattern:
                       '\n\t\tbpm:', listToStr(tpq.pm), '\n\t\t\tbpu:', listToStr(tpq.pu),
                       '\n\t\tbom:', listToStr(tpq.om), '\n\t\t\tbou:', listToStr(tpq.ou),)
 
-            (couv, d) = ntpq.nestedLoopOf(tpq)
+            (couv, d) = ntpq.nestedLoopOf2(tpq)
             #couv : nombre de mappings trouvés (hypothèse de double injection)
             #d : indique les "constantes" de ntpq qui font l'objet d'injection 
             #    par tpq (et la variable de celui-ci)
@@ -287,14 +316,16 @@ class BasicGraphPattern:
                 # on prend les cas où il y a le plus grand nombre d'injections. 
                 # doutes sur le fait qu'il peut y en avoir plusieurs...
                 # on calcule le TPQ possible
-                ctp = TriplePatternQuery(d[ntpq.s], d[ntpq.p], d[ntpq.o], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
+                #ctp = TriplePatternQuery(d[ntpq.s], d[ntpq.p], d[ntpq.o], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
+                ctp = TriplePatternQuery(d['s'], d['p'], d['o'], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
                 (inTP, _) = ctp.equal(tpq)
                 if not(inTP):
                     trouve = True
                     ref_couv = couv
                     fromTP = tpq
                     candTP = ctp
-                    mapVal = mapValues(d[ntpq.s],ntpq.s,tpq.s), mapValues(d[ntpq.p],ntpq.p,tpq.p), mapValues(d[ntpq.o],ntpq.o,tpq.o)
+                    #mapVal = mapValues(d[ntpq.s],ntpq.s,tpq.s), mapValues(d[ntpq.p],ntpq.p,tpq.p), mapValues(d[ntpq.o],ntpq.o,tpq.o)
+                    mapVal = mapValues(d['s'],ntpq.s,tpq.s), mapValues(d['p'],ntpq.p,tpq.p), mapValues(d['o'],ntpq.o,tpq.o)
                     break
         # end for tpq
 
@@ -926,6 +957,8 @@ if __name__ == "__main__":
     bgp.print()
 
     print(tpq2.nestedLoopOf(tpq1))
+    print(tpq2.nestedLoopOf2(tpq1))
+
     (t, tp,fTp,mapVal) = bgp.findNestedLoop(tpq2)
     if t:
         print(tp.toString())

@@ -492,7 +492,7 @@ def equals(g1, g2):
     #---
     assert isinstance(g1, nx.Graph) and isinstance(g2, nx.Graph)
     #---
-    return nx.isomorphism.GraphMatcher(g1, g2, 
+    return nx.isomorphism.DiGraphMatcher(g1, g2, 
         #node_match=nm, 
         node_match=iso.categorical_node_match('type', ''),
         #edge_match=em
@@ -507,7 +507,7 @@ def isSubGraphOf(g1, g2):
     #---
     assert isinstance(g1, nx.Graph) and isinstance(g2, nx.Graph)
     #---
-    GM = nx.isomorphism.GraphMatcher(g2, g1, 
+    GM = nx.isomorphism.DiGraphMatcher(g2, g1, 
                                      #node_match=nm,
                                      node_match=iso.categorical_node_match('type', ''), 
                                      #edge_match=em
@@ -655,44 +655,48 @@ def isSGO(g1, g2):
     if GM.subgraph_is_isomorphic(): return GM.mapping
     else: return None
 
+# mddddd commented on 16 Oct 2017
+# From what i can see you are using GraphMatcher with MultiDiGraphs. 
+# Changing GraphMatcher to DiGraphMatcher seems to fix this bug.
+
 #from lib.QueryManager import *
 
 if __name__ == "__main__":
     print("main")
 
-    # g6 = nx.MultiDiGraph()
-    # g6.add_edges_from([ (1,2,dict(prop='type')), 
-    #                     (1,3,dict(prop='manage')),
-    #                     #(1,4,dict(prop='manage')),
-    #                     (1,3,dict(prop='knows')),
-    #                     (3,2,dict(prop='type')),
-    #                     (4,2,dict(prop='type'))  
-    #                   ])
-    # print('g6')
-    # for e in g6.edges(data=True):
-    #     pprint(e)
+    g6 = nx.MultiDiGraph()
+    g6.add_edges_from([ (1,2,dict(prop='type')), 
+                        (1,3,dict(prop='manage')),
+                        #(1,4,dict(prop='manage')),
+                        (1,3,dict(prop='knows')),
+                        (3,2,dict(prop='type')),
+                        (4,2,dict(prop='type'))  
+                      ])
+    print('g6')
+    for e in g6.edges(data=True):
+        pprint(e)
 
-    # g7 = nx.MultiDiGraph()
-    # g7.add_edges_from([ (5,6,dict(prop='type')), 
-    #                     (5,7,dict(prop='knows')),
-    #                     (7,6,dict(prop='type')),
-    #                     (8,6,dict(prop='type')),
-    #                     (9,6,dict(prop='type')),
-    #                     (5,10,dict(prop='bP'))  
-    #                   ])
-    # print('g7')
-    # for e in g7.edges(data=True):
-    #     pprint(e)
+    g7 = nx.MultiDiGraph()
+    g7.add_edges_from([ (5,6,dict(prop='type')), 
+                        (5,7,dict(prop='knows')),
+                        (7,6,dict(prop='type')),
+                        (8,6,dict(prop='type')),
+                        (9,6,dict(prop='type')),
+                        (5,10,dict(prop='bP'))  
+                      ])
+    print('g7')
+    for e in g7.edges(data=True):
+        pprint(e)
 
-    # map = isSGO(g6,g7)
-    # if map is not None: print('g6 in g7 : ', map)
-    # else: print('g6 not in g7') 
-    # # ne répond pas bien avec : (1,3,dict(prop='manage')) -> g6 in g7 :  {5: 1, 6: 2, 7: 3, 8: 4}
-    # # mais bonne réponse si remplacé par : (1,4,dict(prop='manage')) -> g6 not in g7
+    map = isSGO(g6,g7)
+    if map is not None: print('g6 in g7 : ', map)
+    else: print('g6 not in g7') 
+    # ne répond pas bien avec : (1,3,dict(prop='manage')) -> g6 in g7 :  {5: 1, 6: 2, 7: 3, 8: 4}
+    # mais bonne réponse si remplacé par : (1,4,dict(prop='manage')) -> g6 not in g7
 
-    # map = isSGO(g7,g6)
-    # if map is not None: print('g7 in g6 : ', map)
-    # else: print('g7 not in g6')
+    map = isSGO(g7,g6)
+    if map is not None: print('g7 in g6 : ', map)
+    else: print('g7 not in g6')
 
     query4 = """
     PREFIX rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#>
