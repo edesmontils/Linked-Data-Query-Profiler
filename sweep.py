@@ -123,38 +123,23 @@ class TriplePatternQuery(TripplePattern):
             o = self.o
         return hash(toStr(s, p, o))
 
-    def nestedLoopOf(self, tpq):
-        assert isinstance(
-            tpq, TriplePatternQuery), "TriplePatternQuery.nestedLoopOf : Pb type TPQ"
-        # On recherche les mappings possibles : s-s, s-p, s-o, etc.
-        d = None
-        res = list()
-        chercher('', (self.s, self.p, self.o), dict(
-            {tpq.s: (tpq.sm,tpq.su), tpq.p: (tpq.pm,tpq.pu), tpq.o: (tpq.om,tpq.ou)}), dict(), res)
-        # print('==='); print(res); print('===')
-        couv = 0
-        for x in res:
-            if x['nb'] > couv:
-                couv = x['nb']
-                d = x
-        return (couv, d)
-
     def nestedLoopOf2(self,baseTPQ):
-        # 1:sp->sp 2:so->so 3:s->s 4:so->os 5:s->o 6:o->s 8:po->po 9:p->p
+        # 1:sp->sp 2:so->so 3:s->s 4:so->os 5:s->o 6:o->s 8:po->po 9:p->p 10:sp->po
         # 0/1/2/3 ->(0/1/2/3,0/1/2/3,0/1/2/3)
-        nl = ( 0 , (0,0,0) )
         base = (None,baseTPQ.s,baseTPQ.p,baseTPQ.o)
         if  self.s in baseTPQ.sm: 
-            if self.p in baseTPQ.pm: nl = ( 2 , (1,2,0) )
-            elif self.o in baseTPQ.om: nl = ( 2 , (1,0,3) )
-            else: nl = ( 1 , (1,0,0) )
+            if self.p in baseTPQ.pm: nl = ( 2 , (1,2,0) ) # sp->sp
+            elif self.o in baseTPQ.om: nl = ( 2 , (1,0,3) ) # so->so
+            else: nl = ( 1 , (1,0,0) ) # s->s
         elif self.s in baseTPQ.om:
-            if self.o in baseTPQ.sm: nl = ( 2 , (3,0,1) )
-            else: nl = ( 1 , (3,0,0) )
-        elif self.o in baseTPQ.sm: nl = ( 1 , (0,0,1) )
+            if self.o in baseTPQ.sm: nl = ( 2 , (3,0,1) ) # so->os
+            elif self.p in baseTPQ.pm: nl = ( 2 , (3,2,0) ) # sp->po
+            else: nl = ( 1 , (3,0,0) ) # s->o
+        elif self.o in baseTPQ.sm: nl = ( 1 , (0,0,1) ) # o->s
         elif self.p in baseTPQ.pm:
-            if self.o in baseTPQ.om: nl = ( 2 , (0,2,3) )
-            else: nl = ( 1 , (0,2,0) )
+            if self.o in baseTPQ.om: nl = ( 2 , (0,2,3) ) # po->po
+            else: nl = ( 1 , (0,2,0) ) # p->p
+        else: nl = ( 0 , (0,0,0) )
         (couv,injection) = nl
         # print('injection:',injection)
         return ( couv , 
@@ -167,47 +152,6 @@ def doInjection(base, injection, val) :
     else: return val
 
 #==================================================
-
-# appel chercher( (s,p,o),{bs:bsm,bp:bpm,bo:bom}, dict, set )
-def chercher(tab, ref, tp, d, res):
-    # print(tab,'===> Ref:',ref); print(tab,'---> tp:',tp); print(tab,'---> d:',d); print(tab,'---> res:',res)
-    if len(ref) == 0:
-        # print(tab,'|--> réponse !') 
-        ok = 0
-        for (i, j) in d.items():
-            if i != j:
-                ok += 1
-        if ok > 0:
-            d2 = d.copy()
-            d2['nb'] = ok
-            res.append(d2)
-    else:
-        i = ref[0]
-        reste = ref[1:]
-        if isinstance(i, Variable):
-            # print(tab,'|--> Variable !')
-            d[i] = i
-            chercher(tab+'\t', reste, tp, d, res)
-            d.pop(i)
-        else:
-            for (j, (bj,cj)) in tp.copy().items():
-                if (i in bj):# and (i not in cj):
-                    # print(tab,'|--> choix =>',i,j)
-                    d[i] = j
-                    tp.pop(j)
-                    chercher(tab+'\t', reste, tp, d, res)
-                    tp[j] = (bj,cj)
-                    d.pop(i)
-                else:
-                    # print(tab,'|--> pas bon =>',i,j)
-                    pass
-            d[i] = i
-            # print(tab,'|--> i==i:',i)
-            chercher(tab+'\t', reste, tp, d, res)
-            d.pop(i)
-
-#==================================================
-
 
 class BasicGraphPattern:
     def __init__(self, gap=None, tpq=None):
@@ -299,24 +243,10 @@ class BasicGraphPattern:
             #d : indique les "constantes" de ntpq qui font l'objet d'injection 
             #    par tpq (et la variable de celui-ci)
 
-            # nb_map = 0
-            # nb_eq = 0
-            # if d is not None:  # on cherche à éviter d'avoir le même TP
-            #     for (i, j) in ((ntpq.s, tpq.s), (ntpq.p, tpq.p), (ntpq.o, tpq.o)):
-            #         if (d[i] != i) and isinstance(j, Variable):
-            #             nb_map += 1
-            #         else:
-            #             if (i == j) or (isinstance(i, Variable) and isinstance(j, Variable)):
-            #                 # le second opérande pose pb car interdit : ?s1 p ?o1 . ?s1 p ?o2 . :-(
-            #                 nb_eq += 1
-            #             else:
-            #                 pass
-
-            if (couv > ref_couv):# and (nb_map+nb_eq != 3) :
+            if (couv > ref_couv):
                 # on prend les cas où il y a le plus grand nombre d'injections. 
                 # doutes sur le fait qu'il peut y en avoir plusieurs...
                 # on calcule le TPQ possible
-                #ctp = TriplePatternQuery(d[ntpq.s], d[ntpq.p], d[ntpq.o], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
                 ctp = TriplePatternQuery(d['s'], d['p'], d['o'], ntpq.time, ntpq.client, ntpq.sm, ntpq.pm, ntpq.om)
                 (inTP, _) = ctp.equal(tpq)
                 if not(inTP):
@@ -324,7 +254,6 @@ class BasicGraphPattern:
                     ref_couv = couv
                     fromTP = tpq
                     candTP = ctp
-                    #mapVal = mapValues(d[ntpq.s],ntpq.s,tpq.s), mapValues(d[ntpq.p],ntpq.p,tpq.p), mapValues(d[ntpq.o],ntpq.o,tpq.o)
                     mapVal = mapValues(d['s'],ntpq.s,tpq.s), mapValues(d['p'],ntpq.p,tpq.p), mapValues(d['o'],ntpq.o,tpq.o)
                     break
         # end for tpq
@@ -956,7 +885,6 @@ if __name__ == "__main__":
     bgp = BasicGraphPattern(gap, tpq1)
     bgp.print()
 
-    print(tpq2.nestedLoopOf(tpq1))
     print(tpq2.nestedLoopOf2(tpq1))
 
     (t, tp,fTp,mapVal) = bgp.findNestedLoop(tpq2)
