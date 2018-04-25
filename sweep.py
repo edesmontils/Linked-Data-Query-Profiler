@@ -566,13 +566,7 @@ def processValidation(in_queue, statQueue, ctx):
                     ctx.memory.append(
                         (0, '', old_bgp.birthTime, old_bgp.client, None, old_bgp, 0, 0))
                     sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in old_bgp.tp_set])
-                    if SWEEP_ALL_BGP:
-                        addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
-                        statQueue.put( (1,sbgp) )
-                    else:
-                        if len(sbgp) > 1 :
-                            addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
-                            statQueue.put( (1,sbgp) )                        
+                    statQueue.put( (1, (sbgp,'',id ) ) )                        
 
             # dans le cas où le client TPF n'a pas pu exécuter la requête...
             elif mode == SWEEP_OUT_QUERY:
@@ -598,13 +592,7 @@ def processValidation(in_queue, statQueue, ctx):
                                 ctx.memory.append(
                                     (0, '', old_bgp.birthTime, old_bgp.client, None, old_bgp, 0, 0))
                                 sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in old_bgp.tp_set])
-                                if SWEEP_ALL_BGP:
-                                    addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
-                                    statQueue.put( (1,sbgp) )
-                                else:
-                                    if len(sbgp) > 1 :
-                                        addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
-                                        statQueue.put( (1,sbgp) )
+                                statQueue.put( (1, (sbgp,'',id ) ) )
                         else:
                             if SWEEP_DEBUB_PR:
                                 print('-')
@@ -642,20 +630,13 @@ def processValidation(in_queue, statQueue, ctx):
                     #---
                     assert ip == bgp.client, 'Client Query différent de client BGP'
                     #---
-                    addBGP2Rank(canonicalize_sparql_bgp(qbgp), query,
-                                id, precision, recall, ctx.rankingQueries)
+                    statQueue.put( (3,(canonicalize_sparql_bgp(qbgp),query,id, precision, recall)) )
                     sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
-                    if SWEEP_ALL_BGP:
-                        addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
-                        statQueue.put( (1,sbgp) )
-                    else:
-                        if len(sbgp) > 1 :
-                            addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
-                            statQueue.put( (1,sbgp) )
+                    statQueue.put( (1, (sbgp,query,id) ) )
                 else:
                     if SWEEP_DEBUB_PR:
                         print('Query not assigned')
-                    addBGP2Rank(qbgp, query, id, precision,recall, ctx.rankingQueries)
+                    statQueue.put( (3,(qbgp,query,id, precision, recall)) )
                 if SWEEP_DEBUB_PR:
                     print('--- --- @'+ip+' --- ---')
                     print(' ')
@@ -685,20 +666,13 @@ def processValidation(in_queue, statQueue, ctx):
                 #---
                 assert ip == bgp.client, 'Client Query différent de client BGP'
                 #---
-                addBGP2Rank(canonicalize_sparql_bgp(qbgp), query,
-                            id, precision, recall, ctx.rankingQueries)
+                statQueue.put( (3,(canonicalize_sparql_bgp(qbgp),query,id, precision, recall)) )
                 sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
-                if SWEEP_ALL_BGP:
-                    addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
-                    statQueue.put( (1,sbgp) )
-                else:
-                    if len(sbgp) > 1 :
-                        addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
-                        statQueue.put( (1,sbgp) )
+                statQueue.put( (1,(sbgp,query,id)) )
             else:
                 if SWEEP_DEBUB_PR:
                     print('Query not assigned')
-                addBGP2Rank(qbgp, query, id, precision, recall, ctx.rankingQueries)
+                statQueue.put( (3,(qbgp,query,id, precision, recall)) )
             if SWEEP_DEBUB_PR:
                 print('--- --- @'+ip+' --- ---')
                 print(' ')
@@ -772,10 +746,23 @@ def processStat(ctx, duration, inQueue, outQueue):
             
             if mode==0: ctx.saveMemory()
             elif mode==1:
-                ssc.add(hashBGP(mess),mess)
+                (sbgp, query, id) = mess
+                if SWEEP_ALL_BGP:
+                    addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
+                    ssc.add(hashBGP(sbgp),sbgp)
+                else:
+                    if len(sbgp) > 1 :
+                        addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
+                        ssc.add(hashBGP(sbgp),sbgp)
+
             elif mode==2:
                 (g,o,tpk) = ssc.queryTopK(mess)
                 outQueue.put( [ssc.monitored[e] for e in tpk] )
+
+            elif mode==3:
+                (sbgp, query, id, precision, recall) = mess
+                addBGP2Rank(sbgp, query, id, precision, recall, ctx.rankingQueries)
+
             else:
                 pass
     except KeyboardInterrupt:
