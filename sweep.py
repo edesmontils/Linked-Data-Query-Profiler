@@ -18,6 +18,9 @@ import time
 import csv
 from tools.tools import now, fromISO
 
+from tools.ssa import *
+
+
 from rdflib import Variable, URIRef, Literal
 
 from lxml import etree  # http://lxml.de/index.html#documentation
@@ -37,6 +40,8 @@ SWEEP_IN_QUERY = 4
 SWEEP_OUT_QUERY = 5
 SWEEP_IN_BGP = 6
 
+SWEEP_ALL_BGP = False
+
 SWEEP_START_SESSION = -1
 SWEEP_END_SESSION = -2
 SWEEP_PURGE = -3
@@ -44,7 +49,7 @@ SWEEP_PURGE = -3
 SWEEP_ENTRY_TIMEOUT = 0.8  # percentage of the gap
 SWEEP_PURGE_TIMEOUT = 0.1  # percentage of the gap
 
-SWEEP_DEBUG_BGP_BUILD = True
+SWEEP_DEBUG_BGP_BUILD = False
 SWEEP_DEBUB_PR = False
 
 #==================================================
@@ -62,6 +67,12 @@ def mapValues(di,i,j) :
         return i
     else:
         return None 
+
+def hashBGP(bgp):
+    rep = ''
+    for (s,p,o) in bgp:
+            rep += toStr(s,p,o)+' . '
+    return hash(rep)
 
 #==================================================
 
@@ -516,7 +527,7 @@ def addBGP2Rank(bgp, nquery, line, precision, recall, ranking):
         ranking.append((bgp, 1, nquery, {line}, precision, recall))
 
 
-def processValidation(in_queue, ctx):
+def processValidation(in_queue, statQueue, ctx):
     valGap = ctx.gap * 2
     gap = ctx.gap
     currentTime = now()
@@ -554,8 +565,14 @@ def processValidation(in_queue, ctx):
                 if old_bgp is not None:
                     ctx.memory.append(
                         (0, '', old_bgp.birthTime, old_bgp.client, None, old_bgp, 0, 0))
-                    addBGP2Rank(canonicalize_sparql_bgp(
-                        [(tp.s, tp.p, tp.o) for tp in old_bgp.tp_set]), '', id, 0, 0, ctx.rankingBGPs)
+                    sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in old_bgp.tp_set])
+                    if SWEEP_ALL_BGP:
+                        addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
+                        statQueue.put( (1,sbgp) )
+                    else:
+                        if len(sbgp) > 1 :
+                            addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
+                            statQueue.put( (1,sbgp) )                        
 
             # dans le cas où le client TPF n'a pas pu exécuter la requête...
             elif mode == SWEEP_OUT_QUERY:
@@ -580,8 +597,14 @@ def processValidation(in_queue, ctx):
                             if old_bgp is not None:
                                 ctx.memory.append(
                                     (0, '', old_bgp.birthTime, old_bgp.client, None, old_bgp, 0, 0))
-                                addBGP2Rank(canonicalize_sparql_bgp(
-                                    [(tp.s, tp.p, tp.o) for tp in old_bgp.tp_set]), '', id, 0, 0, ctx.rankingBGPs)
+                                sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in old_bgp.tp_set])
+                                if SWEEP_ALL_BGP:
+                                    addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
+                                    statQueue.put( (1,sbgp) )
+                                else:
+                                    if len(sbgp) > 1 :
+                                        addBGP2Rank(sbgp, '', id, 0, 0, ctx.rankingBGPs)
+                                        statQueue.put( (1,sbgp) )
                         else:
                             if SWEEP_DEBUB_PR:
                                 print('-')
@@ -614,21 +637,25 @@ def processValidation(in_queue, ctx):
                 ctx.stat['sumQuality'] += (recall+precision)/2
                 if bgp is not None:
                     if SWEEP_DEBUB_PR:
-                        print(".\n".join([toStr(s, p, o) for (
-                            itp, (s, p, o), sm, pm, om) in bgp.tp_set]))
+                        print(".\n".join([toStr(s, p, o) for (itp, (s, p, o), sm, pm, om) in bgp.tp_set]))
                     ctx.stat['sumSelectedBGP'] += 1
                     #---
                     assert ip == bgp.client, 'Client Query différent de client BGP'
                     #---
                     addBGP2Rank(canonicalize_sparql_bgp(qbgp), query,
                                 id, precision, recall, ctx.rankingQueries)
-                    addBGP2Rank(canonicalize_sparql_bgp(
-                        [(tp.s, tp.p, tp.o) for tp in bgp.tp_set]), query, id, 0, 0, ctx.rankingBGPs)
+                    sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
+                    if SWEEP_ALL_BGP:
+                        addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
+                        statQueue.put( (1,sbgp) )
+                    else:
+                        if len(sbgp) > 1 :
+                            addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
+                            statQueue.put( (1,sbgp) )
                 else:
                     if SWEEP_DEBUB_PR:
                         print('Query not assigned')
-                    addBGP2Rank(qbgp, query, id, precision,
-                                recall, ctx.rankingQueries)
+                    addBGP2Rank(qbgp, query, id, precision,recall, ctx.rankingQueries)
                 if SWEEP_DEBUB_PR:
                     print('--- --- @'+ip+' --- ---')
                     print(' ')
@@ -660,13 +687,18 @@ def processValidation(in_queue, ctx):
                 #---
                 addBGP2Rank(canonicalize_sparql_bgp(qbgp), query,
                             id, precision, recall, ctx.rankingQueries)
-                addBGP2Rank(canonicalize_sparql_bgp(
-                    [(tp.s, tp.p, tp.o) for tp in bgp.tp_set]), query, id, 0, 0, ctx.rankingBGPs)
+                sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
+                if SWEEP_ALL_BGP:
+                    addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
+                    statQueue.put( (1,sbgp) )
+                else:
+                    if len(sbgp) > 1 :
+                        addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
+                        statQueue.put( (1,sbgp) )
             else:
                 if SWEEP_DEBUB_PR:
                     print('Query not assigned')
-                addBGP2Rank(qbgp, query, id, precision,
-                            recall, ctx.rankingQueries)
+                addBGP2Rank(qbgp, query, id, precision, recall, ctx.rankingQueries)
             if SWEEP_DEBUB_PR:
                 print('--- --- @'+ip+' --- ---')
                 print(' ')
@@ -727,11 +759,25 @@ def save(node_log, lift2):
 #==================================================
 
 
-def processStat(ctx, duration):
+def processStat(ctx, duration, inQueue, outQueue):
+    ssc = SpaceSavingCounter(ctx.memSize)
     try:
         while True:
-            time.sleep(duration.total_seconds())
-            ctx.saveMemory()
+            try:
+                inq = inQueue.get(timeout= duration.total_seconds() )
+            except Empty:
+                inq = (0, '')           
+
+            (mode,mess) = inq
+            
+            if mode==0: ctx.saveMemory()
+            elif mode==1:
+                ssc.add(hashBGP(mess),mess)
+            elif mode==2:
+                (g,o,tpk) = ssc.queryTopK(mess)
+                outQueue.put( [ssc.monitored[e] for e in tpk] )
+            else:
+                pass
     except KeyboardInterrupt:
         pass
 
@@ -739,7 +785,7 @@ def processStat(ctx, duration):
 
 
 class SWEEP:  # Abstract Class
-    def __init__(self, gap, to, opt):
+    def __init__(self, gap, to, opt, mem = 40):
         #---
         assert isinstance(gap, dt.timedelta)
         #---
@@ -749,9 +795,13 @@ class SWEEP:  # Abstract Class
 
         self.lck = mp.Lock()
         manager = mp.Manager()
+ 
         self.memory = manager.list()
         self.rankingBGPs = manager.list()
         self.rankingQueries = manager.list()
+
+        self.memSize = mem # for frequents
+
         # self.avgPrecision = mp.Value('f',0.0)
         # self.avgRecall = mp.Value('f',0.0)
         # self.avgQual = mp.Value('f',0.0)
@@ -769,13 +819,16 @@ class SWEEP:  # Abstract Class
         self.validationQueue = mp.Queue()
         self.resQueue = mp.Queue()
 
+        self.statInQueue = mp.Queue()
+        self.statOutQueue = mp.Queue()
+
         self.dataProcess = mp.Process(target=processAgregator, args=(
             self.dataQueue, self.entryQueue, self.validationQueue, self))
         self.entryProcess = mp.Process(target=processBGPDiscover, args=(
             self.entryQueue, self.resQueue, self.validationQueue, self))
         self.validationProcess = mp.Process(
-            target=processValidation, args=(self.validationQueue, self))
-        self.statProcess = mp.Process(target=processStat, args=(self, gap*3))
+            target=processValidation, args=(self.validationQueue, self.statInQueue, self))
+        self.statProcess = mp.Process(target=processStat, args=(self, gap*3, self.statInQueue, self.statOutQueue))
 
         self.dataProcess.start()
         self.entryProcess.start()
@@ -861,6 +914,10 @@ class SWEEP:  # Abstract Class
                      'bgp': bgp_txt, 'precision': precision, 'recall': recall}
                 writer.writerow(s)
 
+    def getTopK(self,n):
+        self.statInQueue.put( (2,n) )
+        tpk = self.statOutQueue.get()
+        return tpk
 
 #==================================================
 #==================================================

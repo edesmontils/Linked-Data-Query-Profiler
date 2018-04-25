@@ -24,6 +24,7 @@ from lib.bgp import simplifyVars, unSerialize, unSerializeBGP
 from lib.QueryManager import QueryManager
 
 from io import StringIO
+from tools.ssa import *
 
 from sweep import SWEEP, toStr
 
@@ -80,35 +81,52 @@ def index():
 def bo():
     t = '<table cellspacing="50"><tr>'
 
-    rep = '<td><h1>Frequent deduced BGPs</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
-    rep += '<table cellspacing="1" border="1" cellpadding="2">'
-    rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td>'
-    ctx.sweep.rankingBGPs.sort(key=itemgetter(1), reverse=True)
-    for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
-        rep += '<tr>'
-        rep += '<td>'
-        for (s,p,o) in simplifyVars(bgp):
-            rep += html.escape(toStr(s,p,o))+' . <br/>'
-        rep += '</td>'
-        rep += '<td>%d</td><td>%s</td>'%(freq,html.escape(query))
-        rep += '</tr>'
-    rep += '</table></td>'
+    with ctx.sweep.lck:
+        rep = '<td><h1>Frequent deduced BGPs</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
+        rep += '<table cellspacing="1" border="1" cellpadding="2">'
+        rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td>'
+        ctx.sweep.rankingBGPs.sort(key=itemgetter(1), reverse=True)
+        for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
+            rep += '<tr>'
+            rep += '<td>'
+            for (s,p,o) in simplifyVars(bgp):
+                rep += html.escape(toStr(s,p,o))+' . <br/>'
+            rep += '</td>'
+            rep += '<td>%d</td><td>%s</td>'%(freq,html.escape(query))
+            rep += '</tr>'
+        rep += '</table></td>'
 
-    rep += '<td><h1>Frequent Ground Truth Queries</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
-    rep += '<table cellspacing="1" border="1" cellpadding="2">'
-    rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
-    ctx.sweep.rankingQueries.sort(key=itemgetter(1), reverse=True)
-    for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
-        rep += '<tr>'
-        rep += '<td>'
-        for (s,p,o) in simplifyVars(bgp):
-            rep += html.escape(toStr(s,p,o))+' . <br/>'
-        rep += '</td>'
-        rep += '<td>%d</td><td>%s</td><td>%2.3f</td><td>%2.3f</td>'%(freq,html.escape(query), precision/freq, recall/freq)
-        rep += '</tr>'
-    rep += '</table></td>'
+        tk = ctx.sweep.getTopK(ctx.nlast)
+        rep += '<td><h1>Frequent deduced BGPs [MAA05]</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
+        rep += '<table cellspacing="1" border="1" cellpadding="2">'
+        rep += '<thead><td>BGP</td><td>Nb Occ.</td>'
+        for e in tk:
+            (c, eVal) = e
+            rep += '<tr>'
+            rep += '<td>'
+            for (s,p,o) in simplifyVars(eVal):
+                rep += html.escape(toStr(s,p,o))+' . <br/>'
+            print(eVal)
+            rep += '</td>'
+            rep += '<td>%d</td>'%c.val
+            rep += '</tr>'
+        rep += '</table></td>'
 
-    t += rep + '<tr></table>'
+        rep += '<td><h1>Frequent Ground Truth Queries</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
+        rep += '<table cellspacing="1" border="1" cellpadding="2">'
+        rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
+        ctx.sweep.rankingQueries.sort(key=itemgetter(1), reverse=True)
+        for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
+            rep += '<tr>'
+            rep += '<td>'
+            for (s,p,o) in simplifyVars(bgp):
+                rep += html.escape(toStr(s,p,o))+' . <br/>'
+            rep += '</td>'
+            rep += '<td>%d</td><td>%s</td><td>%2.3f</td><td>%2.3f</td>'%(freq,html.escape(query), precision/freq, recall/freq)
+            rep += '</tr>'
+        rep += '</table></td>'
+
+        t += rep + '<tr></table>'
 
     return rep #'<p>Not implemented</p>'
 
@@ -491,9 +509,9 @@ if __name__ == '__main__':
     if aOptimistic: ctx.sweep.swapOptimistic()
     ctx.opt = aOptimistic
 
-    ctx.sweep = SWEEP(dt.timedelta(minutes= ctx.gap),dt.timedelta(minutes= ctx.to),ctx.opt)
-    resProcess = mp.Process(target=processResults, args=(ctx.sweep,ctx.list))
     ctx.nlast = anlast
+    ctx.sweep = SWEEP(dt.timedelta(minutes= ctx.gap),dt.timedelta(minutes= ctx.to),ctx.opt,anlast*2)
+    resProcess = mp.Process(target=processResults, args=(ctx.sweep,ctx.list))
 
     try:
         ctx.sweep.startSession()

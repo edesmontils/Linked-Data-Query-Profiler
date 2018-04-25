@@ -9,6 +9,7 @@ Tools to manage statistics on processes
 #    All rights reserved.
 #    GPL v 2.0 license.
 
+# [MAA05]
 # Ahmed Metwally, Divyakant Agrawal, and Amr Abbadi. 
 # "Efficient computation of frequent and top-k elements in data streams." 
 # Database Theory-ICDT 2005. 
@@ -19,6 +20,7 @@ Tools to manage statistics on processes
 from pprint import pprint
 from collections import OrderedDict
 import math
+import multiprocessing as mp
 
 #==================================================
 
@@ -76,7 +78,6 @@ class SpaceSavingCounter:
         self.size = m               # max size of the counter set
         self.N = 0                  # Current stream size
         self.monitored = dict()     # elements that are counted
-
         self.bucketList = list()
 
         #for continuous frequent
@@ -84,13 +85,13 @@ class SpaceSavingCounter:
         self.ptrPhi = 0
 
 
-    def add(self, e):
+    def add(self, e, eVal = None):
         print('Adding ',e,' to ',self.monitored)
         self.N += 1
 
         if e in self.monitored :
             print('It exists !')
-            c = self.monitored[e]
+            (c, _) = self.monitored[e]
             self.incrementCounter(c)
         else:
             print('It does\'nt exist !')
@@ -105,7 +106,7 @@ class SpaceSavingCounter:
                 b = Bucket(c)
                 self.bucketList.insert(0,b)
             self.incrementCounter(c)
-            self.monitored[e]=c
+            self.monitored[e]= (c, eVal)
 
         self.continuousQueryFrequent(c)
         # self.continuousQueryTopK(c)
@@ -120,6 +121,7 @@ class SpaceSavingCounter:
 
     def incrementCounter(self, c) :
         b = c.bucket
+        print(self.bucketList)
         ib = self.bucketList.index(b)
         if (ib < len(self.bucketList)-1 ) :
             bp = self.bucketList[ib+1]
@@ -175,13 +177,14 @@ class SpaceSavingCounter:
         minGuarFreq = -1
         cl = self.counterList()
         cl.reverse()
+        k = min(k, len(cl) )
         tk = list()
         for (i,c) in enumerate(cl[:k]):
             tk.append(c.id)
             if (minGuarFreq<0) or ( (c.val-c.epsilon) < minGuarFreq): minGuarFreq = c.val-c.epsilon
             if i<k-1 : 
                 if (c.val-c.epsilon) < cl[i+1].val : order=False
-        
+        print(tk)
         return (guaranteed, order, tk)
 
     def continuousQueryTopK(self,c):
