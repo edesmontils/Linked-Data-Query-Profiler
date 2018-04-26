@@ -82,11 +82,12 @@ def bo():
     t = '<table cellspacing="50"><tr>'
 
     with ctx.sweep.lck:
-        rep = '<td><h1>Frequent deduced BGPs</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
+        rep = '<td><h1>Frequent deduced BGPs</h1> (short term memory)<p>('+str(ctx.nlast)+' more frequents)</p>'
         rep += '<table cellspacing="1" border="1" cellpadding="2">'
         rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td>'
         ctx.sweep.rankingBGPs.sort(key=itemgetter(1), reverse=True)
-        for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
+        for (chgDate, bgp, freq, query, _, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
+            if query is None: query = ''
             rep += '<tr>'
             rep += '<td>'
             for (s,p,o) in simplifyVars(bgp):
@@ -97,7 +98,7 @@ def bo():
         rep += '</table></td>'
 
         tk = ctx.sweep.getTopK(ctx.nlast)
-        rep += '<td><h1>Frequent deduced BGPs [MAA05]</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
+        rep += '<td><h1>Frequent deduced BGPs [MAA05]</h1> (long term memory)<p>('+str(ctx.nlast)+' more frequents)</p>'
         rep += '<table cellspacing="1" border="1" cellpadding="2">'
         rep += '<thead><td>BGP</td><td>Nb Occ.</td>'
         for e in tk:
@@ -112,11 +113,11 @@ def bo():
             rep += '</tr>'
         rep += '</table></td>'
 
-        rep += '<td><h1>Frequent Ground Truth Queries</h1><p>('+str(ctx.nlast)+' more frequents)</p>'
+        rep += '<td><h1>Frequent Ground Truth Queries</h1> (short term memory)<p>('+str(ctx.nlast)+' more frequents)</p>'
         rep += '<table cellspacing="1" border="1" cellpadding="2">'
         rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
         ctx.sweep.rankingQueries.sort(key=itemgetter(1), reverse=True)
-        for (bgp, freq, query, _, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
+        for (chgDate, bgp, freq, query, _, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
             rep += '<tr>'
             rep += '<td>'
             for (s,p,o) in simplifyVars(bgp):
@@ -510,7 +511,7 @@ if __name__ == '__main__':
     ctx.opt = aOptimistic
 
     ctx.nlast = anlast
-    ctx.sweep = SWEEP(dt.timedelta(minutes= ctx.gap),dt.timedelta(minutes= ctx.to),ctx.opt,anlast*2)
+    ctx.sweep = SWEEP(dt.timedelta(minutes= ctx.gap),dt.timedelta(minutes= ctx.to),ctx.opt,anlast*10)
     resProcess = mp.Process(target=processResults, args=(ctx.sweep,ctx.list))
 
     try:
