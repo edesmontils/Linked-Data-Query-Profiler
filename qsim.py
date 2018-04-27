@@ -9,47 +9,87 @@ Application ...
 #    All rights reserved.
 #    GPL v 2.0 license.
 
-# import sys
-# from tools.Socket import *
 from threading import *
 import multiprocessing as mp
-
-# import multiprocessing as mp
-
-import datetime as dt
 import iso8601 # https://pypi.python.org/pypi/iso8601/     http://pyiso8601.readthedocs.io/en/latest/
 import time
-
-from tools.tools import *
-from tools.Endpoint import *
 from tools.ProcessSet import *
 from tools.Stat import *
-
 import json
+
+
+import datetime as dt
+import argparse
+from tools.Endpoint import TPFEP, TPFClientError, TimeOut, QueryBadFormed, EndpointException
+from tools.tools import now, date2str
+
+from lib.QueryManager import QueryManager
+from lib.bgp import serializeBGP2str
+
+from flask import Flask, render_template, request, jsonify
+# http://flask.pocoo.org/docs/0.12/
+# from flask_cas import CAS, login_required
+
+from lxml import etree  # http://lxml.de/index.html#documentation
 
 import requests as http
 # http://docs.python-requests.org/en/master/user/quickstart/
 
-# import re
-import argparse
+from urllib.parse import urlparse, quote_plus
+from configparser import ConfigParser, ExtendedInterpolation
 
-from lxml import etree  # http://lxml.de/index.html#documentation
-# from lib.bgp import *
-from lib.QueryManager import *
+
+class Context(object):
+    """docstring for Context"""
+
+    def __init__(self):
+        super(Context, self).__init__()
+        self.sweep = 'http://127.0.0.1:5002'
+        self.tpfc = TPFEP(service='http://localhost:5000/lift')
+        self.tpfc.setEngine(
+            '/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client')
+        self.tree = None
+        self.debug = False
+        self.listeNoms = None
+        self.listeBases = dict()
+        self.listeSP = dict()
+        self.version = '1.0'
+        self.name = 'Name'
+        self.ok = True
+        self.nbQuery = 0
+        self.qm = QueryManager(modeStat=False)
+        self.doPR = False
+        self.lastProcessing = dt.timedelta() #-1
+        self.gap = 60
+        self.addr = ''
+        self.addr_ext = ''
+        # self.BGPRefList = dict()
+        # self.BGPNb = 0
+
+    def setLDQPServer(self, host):
+        self.sweep = host
+
+    def setTPFClient(self, tpfc):
+        self.tpfc = tpfc
+
+
+ctx = Context()
 
 #==================================================	
 
 
 TPF_SERVEUR = 'http://127.0.0.1:5000'
-TPF_SERVEUR_DATASET = 'lift' # default dataset
 TPF_CLIENT = '/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client'
+SWEEP_SERVEUR = 'http://127.0.0.1:5002'
+
+TPF_SERVEUR_DATASET = 'lift' # default dataset
+
 TPF_CLIENT_REDO = 3 # Number of client execution in case of fails
 TPF_CLIENT_TEMPO = 0.01 # sleep duration if client fails
-SWEEP_SERVEUR = 'http://127.0.0.1:5002'
 
 #==================================================
 
-def play(file,nb_processes, server,client,timeout, dataset, nbq,offset,doValid, sweep, gap):
+def play(file,ctx,nb_processes, dataset, nbq,offset):
     compute_queue = mp.Queue(nb_processes)
     print('Traitement de %s' % file)
     parser = etree.XMLParser(recover=True, strip_cdata=True)
@@ -75,7 +115,7 @@ def play(file,nb_processes, server,client,timeout, dataset, nbq,offset,doValid, 
                     current_date = dt.datetime.now()
                     processes = []
                     for i in range(nb_processes):
-                        p = mp.Process(target=run, args=(compute_queue, server, client, timeout, dataset, sweep,doValid,gap))
+                        p = mp.Process(target=run, args=(compute_queue, ctx, dataset))
                         processes.append(p)
                     for p in processes:
                         p.start()
@@ -108,12 +148,13 @@ def play(file,nb_processes, server,client,timeout, dataset, nbq,offset,doValid, 
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
 
-def run(inq, server, client, timeout, dataset, sweep, doPR, gap):
-    sp = TPFEP(service = server, dataset = dataset)#, clientParams= '-s '+host+':'+str(port)  ) #'http://localhost:5000/lift') 
-    sp.setEngine(client) #'/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client')
-    qm = QueryManager(modeStat = False)
-    if timeout: sp.setTimeout(timeout)
+def run(inq, ctx, datasource):
+    sp = ctx.listeSP[datasource]
+    qm = ctx.qm
+    doPR = ctx.doPR
     mss = inq.get()
+    gap = ctx.gap
+    sweep = ctx.sweep
     while mss is not None:
         (nbe,query, bgp_list,d) = mss
         duration = max(dt.timedelta.resolution, d-dt.datetime.now())
@@ -121,9 +162,9 @@ def run(inq, server, client, timeout, dataset, sweep, doPR, gap):
         time.sleep(duration.total_seconds())
 
         try:
-            (bgp,nquery) = qm.extractBGP(query)
-            query = nquery
             if bgp_list=='':
+                (bgp,nquery) = qm.extractBGP(query)
+                query = nquery
                 bgp_list = serializeBGP2str(bgp)
             # print(serializeBGP2str(bgp) )
         except Exception as e:
@@ -132,6 +173,7 @@ def run(inq, server, client, timeout, dataset, sweep, doPR, gap):
 
         print('(%d)'%nbe,'Query:',query)
         no = 'qsim-'+str(nbe)
+        bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
 
         try:
@@ -140,16 +182,16 @@ def run(inq, server, client, timeout, dataset, sweep, doPR, gap):
 
                     mess = '<query time="'+date2str(dt.datetime.now())+'" no="'+no+'"><![CDATA['+query+']]></query>'
                     if doPR:
-                        url = sweep+'/query'
+                        url = ctx.sweep+'/query'
                         print('on:',url)
-                        try:
-                            s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': '<l>'+bgp_list+'</l>'})
-                            print('(%d)'%nbe,'Request posted : ',s.json()['result'])
-                        except Exception as e:
-                            print('Exception',e)
+                        # try:
+                        #     s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': '<l>'+bgp_list+'</l>'})
+                        #     print('(%d)'%nbe,'Request posted : ',s.json()['result'])
+                        # except Exception as e:
+                        #     print('Exception',e)
 
                     before = now()
-                    rep = sp.query(query)
+                    rep = sp.query('#bgp-list#'+quote_plus(bgp_list)+'\n'+query)
                     after = now()
                     processing = after - before
                     # print('(%d)'%nbe,':',rep)
@@ -208,26 +250,119 @@ def run(inq, server, client, timeout, dataset, sweep, doPR, gap):
 #==================================================
 #==================================================
 
-parser = argparse.ArgumentParser(description='Linked Data Query simulator (for a modified TPF server)')
-parser.add_argument('files', metavar='file', nargs='+', help='files to analyse')
-parser.add_argument("--sweep", default=SWEEP_SERVEUR, dest="sweep", help="SWEEP ('"+str(SWEEP_SERVEUR)+"' by default)")
-parser.add_argument("-s","--server", default=TPF_SERVEUR, dest="tpfServer", help="TPF Server ('"+TPF_SERVEUR+"' by default)")
-parser.add_argument("-d", "--dataset", default=TPF_SERVEUR_DATASET, dest="dataset", help="TPF Server Dataset ('"+TPF_SERVEUR_DATASET+"' by default)")
-parser.add_argument("-c", "--client", default=TPF_CLIENT, dest="tpfClient", help="TPF Client ('...' by default)")
-parser.add_argument("-v", "--valid", dest="valid", action="store_true", help="Do precision/recall")
-parser.add_argument("-to", "--timeout", type=float, default=None, dest="timeout",help="TPF Client Time Out in minutes (no timeout by default).")
-parser.add_argument("-p", "--proc", type=int, default=mp.cpu_count(), dest="nb_processes",
-                    help="Number of processes used (%d by default)" % mp.cpu_count())
-parser.add_argument('-n',"--nbQueries", type=int, default=0, dest="nbq", help="Max queries to study (0 by default, i.e. all queries)")
-parser.add_argument('-o',"--offset", type=int, default=0, dest="offset", help="first query to study (0 by default, i.e. all queries)")
-parser.add_argument("-g", "--gap", type=float, default=60, dest="gap", help="Gap in minutes (60 by default)")
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description='Linked Data Query simulator (for a modified TPF server)')
+    parser.add_argument('files', metavar='file', nargs='+', help='files to analyse')
 
-args = parser.parse_args()
 
-# http://localhost:5000/lift : serveur TPF LIFT (exemple du papier)
-# http://localhost:5001/dbpedia_3_9 server dppedia si : ssh -L 5001:172.16.9.3:5001 desmontils@172.16.9.15
-print('Start simulating with %d processes'%args.nb_processes)
-file_set = args.files
-for file in file_set:
-    if existFile(file):
-    	play(file,args.nb_processes, args.tpfServer, args.tpfClient, args.timeout, args.dataset, args.nbq, args.offset, args.valid, args.sweep, dt.timedelta(minutes= args.gap)  )
+    parser.add_argument("--sweep", default=SWEEP_SERVEUR, dest="sweep",help="SWEEP ('"+str(SWEEP_SERVEUR)+"' by default)")
+    parser.add_argument("-s", "--server", default=TPF_SERVEUR,dest="tpfServer", help="TPF Server ('"+TPF_SERVEUR+"' by default)")
+    parser.add_argument("-c", "--client", default=TPF_CLIENT,dest="tpfClient", help="TPF Client ('...' by default)")
+    parser.add_argument("-v", "--valid", default='', dest="valid",action="store_true", help="Do precision/recall")
+    parser.add_argument("-g", "--gap", type=float, default=60,dest="gap", help="Gap in minutes (60 by default)")
+    parser.add_argument("-to", "--timeout", type=float, default=None, dest="timeout",help="TPF Client Time Out in minutes (no timeout by default).")
+    parser.add_argument("--host", default="127.0.0.1",dest="host", help="host ('127.0.0.1' by default)")
+    parser.add_argument("--port", type=int, default=5002,dest="port", help="Port (5002 by default)")
+    parser.add_argument("-f", "--config", default='',dest="cfg", help="Config file")
+
+    parser.add_argument("-d", "--dataset", default=TPF_SERVEUR_DATASET, dest="dataset", help="TPF Server Dataset ('"+TPF_SERVEUR_DATASET+"' by default)")
+    parser.add_argument("-p", "--proc", type=int, default=mp.cpu_count(), dest="nb_processes",help="Number of processes used (%d by default)" % mp.cpu_count())
+    parser.add_argument('-n',"--nbQueries", type=int, default=0, dest="nbq", help="Max queries to study (0 by default, i.e. all queries)")
+    parser.add_argument('-o',"--offset", type=int, default=0, dest="offset", help="first query to study (0 by default, i.e. all queries)")
+
+
+    args = parser.parse_args()
+
+    if (args.cfg == ''):
+        asweep = args.sweep
+        atpfServer = args.tpfServer
+        atpfClient = args.tpfClient
+        ahost = args.host
+        aport = args.port
+        agap = args.gap
+        avalid = args.valid
+        ato = args.timeout
+        aurl = 'http://'+ahost+":"+str(aport)
+        aurl_ext = aurl
+    else:
+        cfg = ConfigParser(interpolation=ExtendedInterpolation())
+        r = cfg.read(args.cfg)
+        if r == []:
+            print('Config file unkown')
+            exit()
+        print(cfg.sections())
+        qsimCfg = cfg['QSIM-WS']
+        asweep = qsimCfg['SWEEP']
+        atpfServer = qsimCfg['TPFServer']
+        atpfClient = qsimCfg['TPFClient']
+        agap = float(qsimCfg['Gap'])
+        avalid = qsimCfg.getboolean('Precision-Recall')
+        ato = float(qsimCfg['TimeOut'])
+        aurl = qsimCfg['LocalAddr']
+        purl = urlparse(aurl)
+        ahost = purl.hostname
+        aport = purl.port
+        aurl_ext = qsimCfg['ExternalAddr']
+
+    ctx.setLDQPServer(asweep)
+    # http://localhost:5000/lift : serveur TPF LIFT (exemple du papier)
+    # http://localhost:5001/dbpedia_3_9 server dppedia si : ssh -L 5001:172.16.9.3:5001 desmontils@172.16.9.15
+    ctx.gap = dt.timedelta(minutes=agap)
+    XMLparser = etree.XMLParser(recover=True, strip_cdata=True)
+    configFile = 'config.xml'
+    ctx.tree = etree.parse(configFile, XMLparser)
+    #---
+    dtd = etree.DTD('config.dtd')
+    assert dtd.validate(ctx.tree), '%s non valide au chargement : %s' % (
+        configFile, dtd.error_log.filter_from_errors()[0])
+    #---
+    lb = ctx.tree.getroot().findall('listeBases/base_de_donnee')
+    for l in lb:
+        f = l.find('fichier')
+        ref = l.find('référence')
+        if ref.text is None:
+            ref.text = ''
+        print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
+        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s %s' % asweep])
+        sp.setEngine(atpfClient)
+        #if ato: sp.setTimeout(ato)
+        ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
+                                        'description': etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
+                                        'tables': []}
+        ctx.listeSP[l.get('nom')] = sp
+    ctx.listeNoms = list(ctx.listeBases.keys())
+    ctx.version = ctx.tree.getroot().get('version')
+    ctx.name = ctx.tree.getroot().get('name')
+    if ctx.tree.getroot().get('debug') == 'false':
+        ctx.debug = False
+    else:
+        ctx.debug = True
+    if avalid:
+        ctx.doPR = True
+    try:
+        ctx.addr = aurl
+        ctx.addr_ext = aurl_ext
+        print('Running qsim ')
+
+        print('Start simulating with %d processes'%args.nb_processes)
+        file_set = args.files
+        for file in file_set:
+            if existFile(file):
+                play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset  )
+
+    except KeyboardInterrupt:
+        pass
+    finally:
+        # ctx.qm.stop()
+        pass
+    print('Fin')
+
+
+
+
+
+
+
+
+
+

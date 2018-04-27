@@ -81,11 +81,11 @@ def index():
 def bo():
     t = '<table cellspacing="50"><tr>'
 
+    rep = '<td><h1>Frequent deduced BGPs</h1> <p>(short term memory : %s ; %s more frequents)</p>'%(ctx.sweep.memDuration,str(ctx.nlast))
+    rep += '<table cellspacing="1" border="1" cellpadding="2">'
+    rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td>'
     with ctx.sweep.lck:
-        rep = '<td><h1>Frequent deduced BGPs</h1> (short term memory)<p>('+str(ctx.nlast)+' more frequents)</p>'
-        rep += '<table cellspacing="1" border="1" cellpadding="2">'
-        rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td>'
-        ctx.sweep.rankingBGPs.sort(key=itemgetter(1), reverse=True)
+        ctx.sweep.rankingBGPs.sort(key=itemgetter(2), reverse=True)
         for (chgDate, bgp, freq, query, _, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
             if query is None: query = ''
             rep += '<tr>'
@@ -97,26 +97,29 @@ def bo():
             rep += '</tr>'
         rep += '</table></td>'
 
-        tk = ctx.sweep.getTopK(ctx.nlast)
-        rep += '<td><h1>Frequent deduced BGPs [MAA05]</h1> (long term memory)<p>('+str(ctx.nlast)+' more frequents)</p>'
-        rep += '<table cellspacing="1" border="1" cellpadding="2">'
-        rep += '<thead><td>BGP</td><td>Nb Occ.</td>'
-        for e in tk:
-            (c, eVal) = e
-            rep += '<tr>'
-            rep += '<td>'
-            for (s,p,o) in simplifyVars(eVal):
-                rep += html.escape(toStr(s,p,o))+' . <br/>'
-            print(eVal)
-            rep += '</td>'
-            rep += '<td>%d</td>'%c.val
-            rep += '</tr>'
-        rep += '</table></td>'
+    with ctx.sweep.lck:
+        tk = ctx.sweep.getTopKBGP(ctx.nlast)
+    rep += '<td><h1>Frequent deduced BGPs [MAA05]</h1><p>(long term memory ; '+str(ctx.nlast)+' more frequents)</p>'
+    rep += '<table cellspacing="1" border="1" cellpadding="2">'
+    rep += '<thead><td>BGP</td><td>Nb Occ.</td>'
+    for e in tk:
+        (c, eVal) = e
+        rep += '<tr>'
+        rep += '<td>'
+        for (s,p,o) in simplifyVars(eVal):
+            rep += html.escape(toStr(s,p,o))+' . <br/>'
+        print(eVal)
+        rep += '</td>'
+        rep += '<td>%d</td>'%c.val
+        rep += '</tr>'
+    rep += '</table></td>'
 
-        rep += '<td><h1>Frequent Ground Truth Queries</h1> (short term memory)<p>('+str(ctx.nlast)+' more frequents)</p>'
-        rep += '<table cellspacing="1" border="1" cellpadding="2">'
-        rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
-        ctx.sweep.rankingQueries.sort(key=itemgetter(1), reverse=True)
+    rep += '<td><h1>Frequent Ground Truth Queries</h1> <p>(short term memory : %s ; %s more frequents)</p>'%(ctx.sweep.memDuration,str(ctx.nlast))
+    rep += '<table cellspacing="1" border="1" cellpadding="2">'
+    rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
+
+    with ctx.sweep.lck:
+        ctx.sweep.rankingQueries.sort(key=itemgetter(2), reverse=True)
         for (chgDate, bgp, freq, query, _, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
             rep += '<tr>'
             rep += '<td>'
@@ -127,7 +130,23 @@ def bo():
             rep += '</tr>'
         rep += '</table></td>'
 
-        t += rep + '<tr></table>'
+    with ctx.sweep.lck:
+        tk = ctx.sweep.getTopKQueries(ctx.nlast)
+    rep += '<td><h1>Frequent Ground Truth Queries [MAA05]</h1> <p>(long term memory ; %s more frequents)</p>'%str(ctx.nlast)
+    rep += '<table cellspacing="1" border="1" cellpadding="2">'
+    rep += '<thead><td>BGP</td><td>Nb Occ.</td>'
+    for e in tk:
+        (c, eVal) = e
+        rep += '<tr>'
+        rep += '<td>'
+        for (s,p,o) in simplifyVars(eVal):
+            rep += html.escape(toStr(s,p,o))+' . <br/>'
+        rep += '</td>'
+        rep += '<td>%d</td>'%c.val
+        rep += '</tr>'
+    rep += '</table></td>'
+
+    t += rep + '<tr></table>'
 
     return rep #'<p>Not implemented</p>'
 

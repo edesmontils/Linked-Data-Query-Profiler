@@ -274,8 +274,7 @@ def treat(query, bgp_list, ip, datasource):
             bgp_list = serializeBGP2str(bgp)
 
         # mess = '<query time="'+date2str(now())+'" client="'+str(ip)+'" no="'+no+'"><![CDATA['+query+' ]]></query>'
-        mess = '<query time="' + \
-            date2str(now())+'" no="'+no+'"><![CDATA['+query+' ]]></query>'
+        mess = '<query time="' +date2str(now())+'" no="'+no+'"><![CDATA['+query+' ]]></query>'
 
         url = ctx.sweep+'/query'
         print('(%d)' % nbe, 'query:', mess)
@@ -374,7 +373,6 @@ SWEEP_SERVEUR = 'http://127.0.0.1:5002'
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description='Linked Data Query Profiler (for a modified TPF server)')
-    # parser.add_argument('files', metavar='file', nargs='+',help='files to analyse')
 
     parser.add_argument("--sweep", default=SWEEP_SERVEUR, dest="sweep",
                         help="SWEEP ('"+str(SWEEP_SERVEUR)+"' by default)")
@@ -449,9 +447,9 @@ if __name__ == '__main__':
         if ref.text is None:
             ref.text = ''
         print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service=atpfServer, dataset=f.get(
-            'nom'), clientParams=['-s %s' % asweep])
+        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s %s' % asweep])
         sp.setEngine(atpfClient)
+        #if ato: sp.setTimeout(ato)
         ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
                                         'description': etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
                                         'tables': []}

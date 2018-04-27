@@ -40,7 +40,7 @@ SWEEP_IN_QUERY = 4
 SWEEP_OUT_QUERY = 5
 SWEEP_IN_BGP = 6
 
-SWEEP_ALL_BGP = True
+SWEEP_ALL_BGP = False
 
 SWEEP_START_SESSION = -1
 SWEEP_END_SESSION = -2
@@ -717,6 +717,7 @@ def addBGP2Rank(bgp, nquery, line, precision, recall, ranking):
 
 def processMemory(ctx, duration, inQueue, outQueue):
     sscBGP = SpaceSavingCounter(ctx.memSize)
+    sscQueries  = SpaceSavingCounter(ctx.memSize)
     lastTimeMemorySaved = ctx.startTime
     nbMemoryChanges = 0
     try:
@@ -735,7 +736,11 @@ def processMemory(ctx, duration, inQueue, outQueue):
                 lastTimeMemorySaved = now()
                 nbMemoryChanges = 0
 
-            if mode==2:
+            if mode==1:
+                (g,o,tpk) = sscQueries.queryTopK(mess)
+                outQueue.put( [sscQueries.monitored[e] for e in tpk] )
+
+            elif mode==2:
                 (g,o,tpk) = sscBGP.queryTopK(mess)
                 outQueue.put( [sscBGP.monitored[e] for e in tpk] )
 
@@ -747,16 +752,17 @@ def processMemory(ctx, duration, inQueue, outQueue):
                     nbMemoryChanges += 1
 
                 if query is not None :
-                        with ctx.lck: addBGP2Rank(canonicalize_sparql_bgp(qbgp), query, id, precision, recall, ctx.rankingQueries)
+                    sbgp = canonicalize_sparql_bgp(qbgp)
+                    with ctx.lck: addBGP2Rank(sbgp, query, id, precision, recall, ctx.rankingQueries)
+                    sscQueries.add(hashBGP(sbgp),sbgp)
 
                 if bgp is not None :
+                    sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
                     if SWEEP_ALL_BGP:
-                        sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
                         with ctx.lck: addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
                         sscBGP.add(hashBGP(sbgp),sbgp)
                     else:
                         if len(sbgp) > 1 :
-                            sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
                             with ctx.lck: addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
                             sscBGP.add(hashBGP(sbgp),sbgp)
             else:
@@ -802,6 +808,7 @@ def saveMemory(memory, lastTimeMemorySaved):
                     bgp_txt = ".\n".join([tp.toStr() for tp in bgp.tp_set])
                 else:
                     bgp_txt = "..."
+                if query is None: query='...'
                 s = {'id': id, 'qID': queryID, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
                 writer.writerow(s)
     print('Memory saved')
@@ -921,8 +928,13 @@ class SWEEP:  # Abstract Class
         self.validationProcess.join()
         self.memoryProcess.join()
 
-    def getTopK(self,n):
+    def getTopKBGP(self,n):
         self.memoryInQueue.put( (2,n) )
+        tpk = self.memoryOutQueue.get()
+        return tpk
+
+    def getTopKQueries(self,n):
+        self.memoryInQueue.put( (1,n) )
         tpk = self.memoryOutQueue.get()
         return tpk
 
