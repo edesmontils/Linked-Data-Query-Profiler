@@ -84,21 +84,20 @@ def bo():
     rep = '<td><h1>Frequent deduced BGPs</h1> <p>(short term memory : %s ; %s more frequents)</p>'%(ctx.sweep.memDuration,str(ctx.nlast))
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td>'
-    with ctx.sweep.lck:
-        ctx.sweep.rankingBGPs.sort(key=itemgetter(2), reverse=True)
-        for (chgDate, bgp, freq, query, _, precision, recall) in ctx.sweep.rankingBGPs[:ctx.nlast]:
-            if query is None: query = ''
-            rep += '<tr>'
-            rep += '<td>'
-            for (s,p,o) in simplifyVars(bgp):
-                rep += html.escape(toStr(s,p,o))+' . <br/>'
-            rep += '</td>'
-            rep += '<td>%d</td><td>%s</td>'%(freq,html.escape(query))
-            rep += '</tr>'
-        rep += '</table></td>'
+    r = ctx.sweep.getRankingBGPs()
+    r.sort(key=itemgetter(2), reverse=True)
+    for (chgDate, bgp, freq, query, _, precision, recall) in r[:ctx.nlast]:
+        if query is None: query = ''
+        rep += '<tr>'
+        rep += '<td>'
+        for (s,p,o) in simplifyVars(bgp):
+            rep += html.escape(toStr(s,p,o))+' . <br/>'
+        rep += '</td>'
+        rep += '<td>%d</td><td>%s</td>'%(freq,html.escape(query))
+        rep += '</tr>'
+    rep += '</table></td>'
 
-    with ctx.sweep.lck:
-        tk = ctx.sweep.getTopKBGP(ctx.nlast)
+    tk = ctx.sweep.getTopKBGP(ctx.nlast)
     rep += '<td><h1>Frequent deduced BGPs [MAA05]</h1><p>(long term memory ; '+str(ctx.nlast)+' more frequents)</p>'
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>BGP</td><td>Nb Occ.</td>'
@@ -118,20 +117,19 @@ def bo():
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
 
-    with ctx.sweep.lck:
-        ctx.sweep.rankingQueries.sort(key=itemgetter(2), reverse=True)
-        for (chgDate, bgp, freq, query, _, precision, recall) in ctx.sweep.rankingQueries[:ctx.nlast]:
-            rep += '<tr>'
-            rep += '<td>'
-            for (s,p,o) in simplifyVars(bgp):
-                rep += html.escape(toStr(s,p,o))+' . <br/>'
-            rep += '</td>'
-            rep += '<td>%d</td><td>%s</td><td>%2.3f</td><td>%2.3f</td>'%(freq,html.escape(query), precision/freq, recall/freq)
-            rep += '</tr>'
-        rep += '</table></td>'
+    r = ctx.sweep.getRankingQueries()
+    r.sort(key=itemgetter(2), reverse=True)
+    for (chgDate, bgp, freq, query, _, precision, recall) in r[:ctx.nlast]:
+        rep += '<tr>'
+        rep += '<td>'
+        for (s,p,o) in simplifyVars(bgp):
+            rep += html.escape(toStr(s,p,o))+' . <br/>'
+        rep += '</td>'
+        rep += '<td>%d</td><td>%s</td><td>%2.3f</td><td>%2.3f</td>'%(freq,html.escape(query), precision/freq, recall/freq)
+        rep += '</tr>'
+    rep += '</table></td>'
 
-    with ctx.sweep.lck:
-        tk = ctx.sweep.getTopKQueries(ctx.nlast)
+    tk = ctx.sweep.getTopKQueries(ctx.nlast)
     rep += '<td><h1>Frequent Ground Truth Queries [MAA05]</h1> <p>(long term memory ; %s more frequents)</p>'%str(ctx.nlast)
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>BGP</td><td>Nb Occ.</td>'
@@ -236,9 +234,7 @@ def sweep():
 
 @app.route('/run', methods=['get'])
 def doRun():
-    nbgp = ctx.sweep.nbBGP.value
-    nreq = ctx.sweep.nbREQ.value
-    return jsonify(result=(nbgp,nreq))
+    return jsonify(result=(ctx.sweep.nbBGP.value, ctx.sweep.nbREQ.value))
 
 @app.route('/inform', methods=['post','get'])
 def processInform():

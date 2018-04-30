@@ -86,15 +86,15 @@ class SpaceSavingCounter:
 
 
     def add(self, e, eVal = None):
-        print('Adding ',e,' to ',self.monitored)
+        # print('Adding ',e,' to ',self.monitored)
         self.N += 1
 
         if e in self.monitored :
-            print('It exists !')
+            # print('It exists !')
             (c, _) = self.monitored[e]
             self.incrementCounter(c)
         else:
-            print('It does\'nt exist !')
+            # print('It does\'nt exist !')
             c = Counter(e)
             if (len(self.monitored) >= self.size) :
                 # print('replacing')
@@ -108,7 +108,7 @@ class SpaceSavingCounter:
             self.incrementCounter(c)
             self.monitored[e]= (c, eVal)
 
-        self.continuousQueryFrequent(c)
+        # self.continuousQueryFrequent(c)
         # self.continuousQueryTopK(c)
 
         self.print()
@@ -152,7 +152,7 @@ class SpaceSavingCounter:
         cl = self.counterList()
         cl.reverse()
         threshold = math.ceil(phi*self.N)
-        print('Do frequents with ', threshold, ' on ',cl)
+        # print('Do frequents with ', threshold, ' on ',cl)
         for c in cl:
             if c.val <= threshold: break
             frqts.append(c.id)
@@ -184,7 +184,7 @@ class SpaceSavingCounter:
             if (minGuarFreq<0) or ( (c.val-c.epsilon) < minGuarFreq): minGuarFreq = c.val-c.epsilon
             if i<k-1 : 
                 if (c.val-c.epsilon) < cl[i+1].val : order=False
-        print(tk)
+        # print(tk)
         return (guaranteed, order, tk)
 
     def continuousQueryTopK(self,c):

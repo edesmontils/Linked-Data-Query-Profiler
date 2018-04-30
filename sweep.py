@@ -644,58 +644,6 @@ def processValidation(in_queue, memoryQueue, ctx):
 
 #==================================================
 
-
-def makeLog(ip):
-    #print('Finding bgp')
-    node_log = etree.Element('log')
-    node_log.set('ip', ip)
-    return node_log
-
-
-def addBGP(n, bgp, node_log):
-    #print(serializeBGP2str([ x for (x,sm,pm,om,h) in bgp.tp_set]))
-    entry_node = etree.SubElement(node_log, 'entry')
-    entry_node.set('datetime', '%s' % bgp.time)
-    entry_node.set('logline', '%s' % n)
-    request_node = etree.SubElement(entry_node, 'request')
-    try:
-        bgp_node = serializeBGP([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
-        entry_node.insert(1, bgp_node)
-        query = 'select * where{ \n'
-        for tp in bgp.tp_set:
-            query += serialize2string(tp.s) + ' ' + serialize2string(tp.p) + \
-                ' ' + serialize2string(tp.o) + ' .\n'
-        query += ' }'
-        request_node.text = query
-    except Exception as e:
-        print('PB serialize BGP : %s\n%s\n%s', e.__str__(), query, bgp)
-    return node_log
-
-
-def save(node_log, lift2):
-    try:
-        print('Ecriture de "%s"' % lift2)
-        tosave = etree.tostring(
-            node_log,
-            encoding="UTF-8",
-            xml_declaration=True,
-            pretty_print=True,
-            doctype='<!DOCTYPE log SYSTEM "http://documents.ls2n.fr/be4dbp/log.dtd">')
-        try:
-            f = open(lift2, 'w')
-            f.write(tosave.decode('utf-8'))
-        except Exception as e:
-            print(
-                'PB Test Analysis saving %s : %s',
-                lift2,
-                e.__str__())
-        finally:
-            f.close()
-    except etree.DocumentInvalid as e:
-        print('PB Test Analysis, %s not validated : %s' % (lift2, e))
-
-#==================================================
-
 def addBGP2Rank(bgp, nquery, line, precision, recall, ranking):
     ok = False
     for (i, (t, d, n, query, ll, p, r)) in enumerate(ranking):
@@ -746,25 +694,23 @@ def processMemory(ctx, duration, inQueue, outQueue):
 
             elif mode==4:
                 (id, queryID, time, ip, query, qbgp, bgp, precision, recall) = mess
-
+                
                 with ctx.lck: 
                     ctx.memory.append( (id, queryID, time, ip, query, bgp, precision, recall) )
                     nbMemoryChanges += 1
 
                 if query is not None :
                     sbgp = canonicalize_sparql_bgp(qbgp)
-                    with ctx.lck: addBGP2Rank(sbgp, query, id, precision, recall, ctx.rankingQueries)
+                    with ctx.lck: 
+                        addBGP2Rank(sbgp, query, id, precision, recall, ctx.rankingQueries)
                     sscQueries.add(hashBGP(sbgp),sbgp)
 
                 if bgp is not None :
                     sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
-                    if SWEEP_ALL_BGP:
-                        with ctx.lck: addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
+                    if SWEEP_ALL_BGP or (len(sbgp) > 1):
+                        with ctx.lck: 
+                            addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
                         sscBGP.add(hashBGP(sbgp),sbgp)
-                    else:
-                        if len(sbgp) > 1 :
-                            with ctx.lck: addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
-                            sscBGP.add(hashBGP(sbgp),sbgp)
             else:
                 pass
 
@@ -929,14 +875,81 @@ class SWEEP:  # Abstract Class
         self.memoryProcess.join()
 
     def getTopKBGP(self,n):
-        self.memoryInQueue.put( (2,n) )
-        tpk = self.memoryOutQueue.get()
+        with self.lck:
+            self.memoryInQueue.put( (2,n) )
+            tpk = self.memoryOutQueue.get()
         return tpk
 
     def getTopKQueries(self,n):
-        self.memoryInQueue.put( (1,n) )
-        tpk = self.memoryOutQueue.get()
+        with self.lck:
+            self.memoryInQueue.put( (1,n) )
+            tpk = self.memoryOutQueue.get()
         return tpk
+
+    def getRankingBGPs(self) :
+        return self.cloneRanking(self.rankingBGPs)
+
+    def getRankingQueries(self) :
+        return self.cloneRanking(self.rankingQueries)
+
+    def cloneRanking(self, ranking) :
+        res = []
+        with self.lck:
+            for (t, d, n, query, ll, p, r) in ranking:
+                res.append( (t, d, n, query, ll, p, r) )
+        return res
+
+#==================================================
+
+
+def makeLog(ip):
+    #print('Finding bgp')
+    node_log = etree.Element('log')
+    node_log.set('ip', ip)
+    return node_log
+
+
+def addBGP(n, bgp, node_log):
+    #print(serializeBGP2str([ x for (x,sm,pm,om,h) in bgp.tp_set]))
+    entry_node = etree.SubElement(node_log, 'entry')
+    entry_node.set('datetime', '%s' % bgp.time)
+    entry_node.set('logline', '%s' % n)
+    request_node = etree.SubElement(entry_node, 'request')
+    try:
+        bgp_node = serializeBGP([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
+        entry_node.insert(1, bgp_node)
+        query = 'select * where{ \n'
+        for tp in bgp.tp_set:
+            query += serialize2string(tp.s) + ' ' + serialize2string(tp.p) + \
+                ' ' + serialize2string(tp.o) + ' .\n'
+        query += ' }'
+        request_node.text = query
+    except Exception as e:
+        print('PB serialize BGP : %s\n%s\n%s', e.__str__(), query, bgp)
+    return node_log
+
+
+def save(node_log, lift2):
+    try:
+        print('Ecriture de "%s"' % lift2)
+        tosave = etree.tostring(
+            node_log,
+            encoding="UTF-8",
+            xml_declaration=True,
+            pretty_print=True,
+            doctype='<!DOCTYPE log SYSTEM "http://documents.ls2n.fr/be4dbp/log.dtd">')
+        try:
+            f = open(lift2, 'w')
+            f.write(tosave.decode('utf-8'))
+        except Exception as e:
+            print(
+                'PB Test Analysis saving %s : %s',
+                lift2,
+                e.__str__())
+        finally:
+            f.close()
+    except etree.DocumentInvalid as e:
+        print('PB Test Analysis, %s not validated : %s' % (lift2, e))
 
 #==================================================
 #==================================================
