@@ -111,7 +111,7 @@ class SpaceSavingCounter:
         # self.continuousQueryFrequent(c)
         # self.continuousQueryTopK(c)
 
-        self.print()
+        # self.print()
 
     def print(self):
         for (i,b) in enumerate(self.bucketList):
@@ -121,7 +121,7 @@ class SpaceSavingCounter:
 
     def incrementCounter(self, c) :
         b = c.bucket
-        print(self.bucketList)
+        # print(self.bucketList)
         ib = self.bucketList.index(b)
         if (ib < len(self.bucketList)-1 ) :
             bp = self.bucketList[ib+1]

@@ -36,14 +36,14 @@ SWEEP_IN_ENTRY = 1
 SWEEP_IN_DATA = 2
 SWEEP_IN_END = 3
 
-SWEEP_IN_LOG = 7
-
 SWEEP_IN_QUERY = 4
 SWEEP_OUT_QUERY = 5
 SWEEP_IN_BGP = 6
 
 SWEEP_ALL_BGP = False
 
+SWEEP_START_SESSION = -1
+SWEEP_END_SESSION = -2
 SWEEP_PURGE = -3
 
 SWEEP_ENTRY_TIMEOUT = 0.8  # percentage of the gap
@@ -288,40 +288,47 @@ class BasicGraphPattern:
 
 #==================================================
 
-def processAgregator(in_queue, out_queue, ctx):
+def processAgregator(in_queue, out_queue, val_queue, ctx):
     entry_timeout = ctx.gap*SWEEP_ENTRY_TIMEOUT
     purge_timeout = (ctx.gap*SWEEP_PURGE_TIMEOUT).total_seconds()
     currentTime = now()
     elist = dict()
-    print('[processAgregator] Started :\n\t- entry_timeout :',entry_timeout,'\n\t- purge_timeout : ',purge_timeout)
     try:
         inq = in_queue.get()
         while inq is not None:
             (id, x, val) = inq
             if x == SWEEP_IN_ENTRY:
-                print('[processAgregator] New Entry')
                 (s, p, o, t, cl) = val
                 currentTime = now()
                 elist[id] = (s, p, o, currentTime, cl, set(), set(), set())
             elif x == SWEEP_IN_DATA:
-                print('[processAgregator] New Data In')
                 if id in elist:  # peut être absent car purgé
                     (s, p, o, t, _, sm, pm, om) = elist[id]
                     (xs, xp, xo) = val
-                    currentTime = max(currentTime, t) + dt.timedelta(microseconds=1)
-                    if isinstance(s, Variable): sm.add(xs)
-                    if isinstance(p, Variable): pm.add(xp)
-                    if isinstance(o, Variable): om.add(xo)
+                    currentTime = max(currentTime, t) + \
+                        dt.timedelta(microseconds=1)
+                    if isinstance(s, Variable):
+                        sm.add(xs)
+                    if isinstance(p, Variable):
+                        pm.add(xp)
+                    if isinstance(o, Variable):
+                        om.add(xo)
             elif x == SWEEP_IN_END:
-                print('[processAgregator] In ended')
                 mss = elist.pop(id, None)
                 if mss is not None:  # peut être absent car purgé
                     out_queue.put((id, mss))
-            elif x == SWEEP_IN_LOG:
-                print('[processAgregator] New Log Entry')
-                out_queue.put((id, val))
+            elif x == SWEEP_START_SESSION:
+                # print('Agregator - Start Session')
+                currentTime = now()
+                elist.clear()
+                out_queue.put((id, SWEEP_START_SESSION))
+            elif x == SWEEP_END_SESSION:
+                # print('Agregator - End Session')
+                currentTime = now()
+                for v in elist:
+                    out_queue.put((v, elist.pop(v)))
+                out_queue.put((id, SWEEP_END_SESSION))
             else:  # SWEEP_PURGE...
-                print('[processAgregator] purge (%d waiting entries)'%len(elist))
                 out_queue.put((id, SWEEP_PURGE))
 
             # purge les entrées trop vieilles !
@@ -337,36 +344,42 @@ def processAgregator(in_queue, out_queue, ctx):
             try:
                 inq = in_queue.get(timeout=purge_timeout)
             except Empty:
+                # print('purge')
                 currentTime = now()
                 inq = (0, SWEEP_PURGE, None)
-
     except KeyboardInterrupt:
         # penser à purger les dernières entrées -> comme une fin de session
         pass
     finally:
         for v in elist:
             out_queue.put((v, elist.pop(v)))
-        out_queue.put((0, SWEEP_PURGE))
     out_queue.put(None)
-    print('[processAgregator] Stopped')
+    val_queue.put(None)
 
 #==================================================
 
 
-def processBGPDiscover(in_queue, val_queue, ctx):
+def processBGPDiscover(in_queue, out_queue, val_queue, ctx):
     gap = ctx.gap
     BGP_list = []
-    print('[processBGPDiscover] Started')
     try:
         entry = in_queue.get()
         while entry != None:
             (id, val) = entry
             if val == SWEEP_PURGE:
-                print('[BGPDiscover] Purge (%d waiting BGPs)'%len(BGP_list))
                 val_queue.put((SWEEP_PURGE, 0, None))
-
+            elif val == SWEEP_START_SESSION:
+                # print('BGPDiscover - Start Session')
+                BGP_list.clear()
+                out_queue.put(SWEEP_START_SESSION)
+            elif val == SWEEP_END_SESSION:
+                # print('BGPDiscover - End Session')
+                for bgp in BGP_list:
+                    out_queue.put(bgp)
+                    val_queue.put((SWEEP_IN_BGP, -1, bgp))
+                BGP_list.clear()
+                out_queue.put(SWEEP_END_SESSION)
             else:
-                # print('[BGPDiscover] TPQ Analysys')
                 (s, p, o, time, client, sm, pm, om) = val
                 new_tpq = TriplePatternQuery(s, p, o, time, client, sm, pm, om)
                 new_tpq.renameVars(id)
@@ -438,6 +451,7 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                 else:
                     recent.append(bgp)
             for bgp in old:
+                out_queue.put(bgp)
                 val_queue.put((SWEEP_IN_BGP, -1, bgp))
             BGP_list = recent
             ctx.nbBGP.value = len(BGP_list)
@@ -447,12 +461,11 @@ def processBGPDiscover(in_queue, val_queue, ctx):
         pass
     finally:
         for bgp in BGP_list:
+            out_queue.put(bgp)
             val_queue.put((SWEEP_IN_BGP, -1, bgp))
         BGP_list.clear()
         ctx.nbBGP.value = 0
-        val_queue.put((SWEEP_PURGE, 0, None))
-    val_queue.put(None)
-    print('[processBGPDiscover] Stopped')
+    out_queue.put(None)
 
 #==================================================
 
@@ -503,14 +516,12 @@ def processValidation(in_queue, memoryQueue, ctx):
     gap = ctx.gap
     currentTime = now()
     queryList = OrderedDict()
-    print('[processValidation] Started :\n\t- gap :',gap,'\n\t- valGap : ',valGap)
     try:
         inq = in_queue.get()
         while inq is not None:
             (mode, id, val) = inq
 
             if mode == SWEEP_IN_QUERY:
-                print('[processValidation] Query analysis')
                 with ctx.lck:
                     ctx.stat['nbQueries'] += 1
                 (time, ip, query, qbgp, queryID) = val
@@ -522,7 +533,6 @@ def processValidation(in_queue, memoryQueue, ctx):
                 queryList[id] = ((time, ip, query, qbgp, queryID), bgp, precision, recall)
 
             elif mode == SWEEP_IN_BGP:
-                print('[processValidation] BGP Analysis')
                 ctx.stat['nbBGP'] += 1
                 bgp = val
                 currentTime = now()
@@ -540,7 +550,6 @@ def processValidation(in_queue, memoryQueue, ctx):
 
             # dans le cas où le client TPF n'a pas pu exécuter la requête...
             elif mode == SWEEP_OUT_QUERY:
-                print('[processValidation] Query deletion')
                 # suppress query 'queryID'
                 for i in queryList:
                     ((time, ip, query, qbgp, queryID),
@@ -567,7 +576,6 @@ def processValidation(in_queue, memoryQueue, ctx):
                         break
 
             else:  # mode == SWEEP_PURGE
-                print('[processValidation] Purge (%d waiting queries)'%len(queryList))
                 currentTime = now()
 
             # Suppress older queries
@@ -633,7 +641,6 @@ def processValidation(in_queue, memoryQueue, ctx):
                 print('--- --- @'+ip+' --- ---')
                 print(' ')
         ctx.nbREQ.value = 0
-    print('[processValidation] Stopped')
 
 #==================================================
 
@@ -661,10 +668,6 @@ def processMemory(ctx, duration, inQueue, outQueue):
     sscQueries  = SpaceSavingCounter(ctx.memSize)
     lastTimeMemorySaved = ctx.startTime
     nbMemoryChanges = 0
-    maxNbMemory = 0
-    maxRankingBGPs = 0
-    maxRankingQueries = 0
-    print('[processMemory] Started :\n\t- to : ',duration, '\n\t- mem. duration :',ctx.memDuration)
     try:
         while True:
             try:
@@ -675,7 +678,6 @@ def processMemory(ctx, duration, inQueue, outQueue):
             (mode,mess) = inq
 
             if ((mode==0) and (nbMemoryChanges > 0)) or (nbMemoryChanges > 10): # Save memory in a CSV file
-                print('[processMemory] Save (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
                 with ctx.lck:
                     ref = lastTimeMemorySaved
                     saveMemory(ctx.memory,ref)
@@ -691,11 +693,11 @@ def processMemory(ctx, duration, inQueue, outQueue):
                 outQueue.put( [sscBGP.monitored[e] for e in tpk] )
 
             elif mode==4:
-                print('[processMemory] new Entry in memory (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
                 (id, queryID, time, ip, query, qbgp, bgp, precision, recall) = mess
-
-                ctx.memory.append( (id, queryID, time, ip, query, bgp, precision, recall) )
-                nbMemoryChanges += 1
+                
+                with ctx.lck: 
+                    ctx.memory.append( (id, queryID, time, ip, query, bgp, precision, recall) )
+                    nbMemoryChanges += 1
 
                 if query is not None :
                     sbgp = canonicalize_sparql_bgp(qbgp)
@@ -710,20 +712,14 @@ def processMemory(ctx, duration, inQueue, outQueue):
                             addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
                         sscBGP.add(hashBGP(sbgp),sbgp)
             else:
-                print('[processMemory] Purge (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
-
-            maxNbMemory = max(maxNbMemory, len(ctx.memory))
-            maxRankingBGPs = max( maxRankingBGPs, len(ctx.rankingBGPs) ) 
-            maxRankingQueries = max( maxRankingQueries, len(ctx.rankingQueries) )
+                pass
 
             # Oldest elements in short memory are deleted
             threshold = now() - ctx.memDuration
             with ctx.lck:
                 while len(ctx.memory)>0 :
                     (id, queryID, time, ip, query, bgp, precision, recall) = ctx.memory[0]
-                    if bgp is not None : t = bgp.time
-                    else: t = time
-                    if t < threshold : ctx.memory.pop(0)
+                    if time < threshold : ctx.memory.pop(0)
                     else: break
                 i = 0
                 while i<len(ctx.rankingBGPs) :
@@ -741,8 +737,6 @@ def processMemory(ctx, duration, inQueue, outQueue):
             with ctx.lck: 
                 saveMemory(ctx.memory,lastTimeMemorySaved)
 
-    print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size  ',maxRankingBGPs ,'\n\t- max Queries ranking size  ',maxRankingQueries )
-
 def saveMemory(memory, lastTimeMemorySaved):
     file = 'sweep.csv'  # (id, time, ip, query, bgp, precision, recall)
     sep = '\t'
@@ -750,23 +744,20 @@ def saveMemory(memory, lastTimeMemorySaved):
     if exists: mode = "a"
     else: mode="w"
     print('Saving memory ',mode)
-    try:
-        with open(file, mode, encoding='utf-8') as f:
-            fn = ['id', 'qID', 'time', 'ip', 'query', 'bgp', 'precision', 'recall']
-            writer = csv.DictWriter(f, fieldnames=fn, delimiter=sep)
-            if not(exists): writer.writeheader()
-            for (id, queryID, t, ip, query, bgp, precision, recall) in memory:
-                if t > lastTimeMemorySaved:
-                    if bgp is not None:
-                        bgp_txt = ".\n".join([tp.toStr() for tp in bgp.tp_set])
-                    else:
-                        bgp_txt = "..."
-                    if query is None: query='...'
-                    s = {'id': id, 'qID': queryID, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
-                    writer.writerow(s)
-        print('Memory saved')
-    except KeyboardInterrupt:
-        print('Interupted')
+    with open(file, mode, encoding='utf-8') as f:
+        fn = ['id', 'qID', 'time', 'ip', 'query', 'bgp', 'precision', 'recall']
+        writer = csv.DictWriter(f, fieldnames=fn, delimiter=sep)
+        if not(exists): writer.writeheader()
+        for (id, queryID, t, ip, query, bgp, precision, recall) in memory:
+            if t > lastTimeMemorySaved:
+                if bgp is not None:
+                    bgp_txt = ".\n".join([tp.toStr() for tp in bgp.tp_set])
+                else:
+                    bgp_txt = "..."
+                if query is None: query='...'
+                s = {'id': id, 'qID': queryID, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
+                writer.writerow(s)
+    print('Memory saved')
 
 #==================================================
 
@@ -804,14 +795,15 @@ class SWEEP:  # Abstract Class
         self.dataQueue = mp.Queue()
         self.entryQueue = mp.Queue()
         self.validationQueue = mp.Queue()
+        self.resQueue = mp.Queue()
 
         self.memoryInQueue = mp.Queue()
         self.memoryOutQueue = mp.Queue()
 
         self.dataProcess = mp.Process(target=processAgregator, args=(
-            self.dataQueue, self.entryQueue, self))
+            self.dataQueue, self.entryQueue, self.validationQueue, self))
         self.entryProcess = mp.Process(target=processBGPDiscover, args=(
-            self.entryQueue, self.validationQueue, self))
+            self.entryQueue, self.resQueue, self.validationQueue, self))
         self.validationProcess = mp.Process(
             target=processValidation, args=(self.validationQueue, self.memoryInQueue, self))
         self.memoryProcess = mp.Process(target=processMemory, args=(self, gap*3, self.memoryInQueue, self.memoryOutQueue))
@@ -827,6 +819,12 @@ class SWEEP:  # Abstract Class
 
     def swapOptimistic(self):
         self.optimistic = not(self.optimistic)
+
+    def startSession(self):
+        self.dataQueue.put((0, SWEEP_START_SESSION, ()))
+
+    def endSession(self):
+        self.dataQueue.put((0, SWEEP_END_SESSION, ()))
 
     def put(self, v):
         self.dataQueue.put(v)
@@ -852,10 +850,22 @@ class SWEEP:  # Abstract Class
 
     def putLog(self, entry_id, entry):
         # (s,p,o,t,c,sm,pm,om) = entry
-        self.dataQueue.put((entry_id, SWEEP_IN_LOG, entry))
+        self.entryQueue.put((entry_id, entry))
 
     def delQuery(self, x):
         self.validationQueue.put((SWEEP_OUT_QUERY, 0, x))
+
+    def get(self):
+        try:
+            r = self.resQueue.get()
+            if r == SWEEP_START_SESSION:
+                return self.get()
+            if r == SWEEP_END_SESSION:
+                return None
+            else:
+                return r
+        except KeyboardInterrupt:
+            return None
 
     def stop(self):
         self.dataQueue.put(None)

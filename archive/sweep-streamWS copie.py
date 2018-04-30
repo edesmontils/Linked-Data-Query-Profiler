@@ -107,6 +107,7 @@ def bo():
         rep += '<td>'
         for (s,p,o) in simplifyVars(eVal):
             rep += html.escape(toStr(s,p,o))+' . <br/>'
+        print(eVal)
         rep += '</td>'
         rep += '<td>%d</td>'%c.val
         rep += '</tr>'
@@ -402,7 +403,8 @@ def processData():
                     #currentTime = now()
                     entry = (s,p,o,time,client,set(),set(),set())
 
-                    # print('new TPQ : ',toStr(s,p,o))
+                    # ctx.sweep.putEntry(i,s,p,o,time,client)
+                    print('new TPQ : ',toStr(s,p,o))
 
                 elif e.tag == 'd':
                     xs = unSerialize(e[0])
@@ -454,6 +456,20 @@ def mentions():
         <p>(c) E. Desmontils &amp; P. Serrano-Alvarado, University of Nantes, France, 2017</p>
     """
     return s
+
+#==================================================
+
+def processResults(sweep,list):
+    i = 0
+    try:
+        res = sweep.get()
+        while res != None:
+            i += 1
+            # res.print()
+            list.append(res)
+            res = sweep.get()
+    except KeyboardInterrupt:
+        pass
 
 #==================================================
 #==================================================
@@ -511,8 +527,11 @@ if __name__ == '__main__':
 
     ctx.nlast = anlast
     ctx.sweep = SWEEP(dt.timedelta(minutes= ctx.gap),dt.timedelta(minutes= ctx.to),ctx.opt,anlast*10)
+    resProcess = mp.Process(target=processResults, args=(ctx.sweep,ctx.list))
 
     try:
+        ctx.sweep.startSession()
+        resProcess.start()
         app.run(
             host=ahost,
             port=int(aport),
@@ -521,6 +540,8 @@ if __name__ == '__main__':
         # while 1:
         #     time.sleep(60)
     except KeyboardInterrupt:
+        ctx.sweep.endSession()
         ctx.sweep.stop()
         ctx.qm.stop()
+        resProcess.join()
     print('The End !!!')
