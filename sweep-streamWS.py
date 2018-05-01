@@ -115,7 +115,6 @@ def bo():
     rep += '<td><h1>Frequent Ground Truth Queries</h1> <p>(short term memory : %s ; %s more frequents)</p>'%(ctx.sweep.memDuration,str(ctx.nlast))
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>BGP</td><td>Nb Occ.</td><td>Query Exemple</td><td>Avg. Precision</td><td>Avg. Recall</td>'
-
     r = ctx.sweep.getRankingQueries()
     r.sort(key=itemgetter(2), reverse=True)
     for (chgDate, bgp, freq, query, _, precision, recall) in r[:ctx.nlast]:
@@ -127,6 +126,7 @@ def bo():
         rep += '<td>%d</td><td>%s</td><td>%2.3f</td><td>%2.3f</td>'%(freq,html.escape(query), precision/freq, recall/freq)
         rep += '</tr>'
     rep += '</table></td>'
+
 
     tk = ctx.sweep.getTopKQueries(ctx.nlast)
     rep += '<td><h1>Frequent Ground Truth Queries [MAA05]</h1> <p>(long term memory ; %s more frequents)</p>'%str(ctx.nlast)
@@ -145,7 +145,7 @@ def bo():
 
     t += rep + '<tr></table>'
 
-    return rep #'<p>Not implemented</p>'
+    return rep
 
 @app.route('/pr')
 def doPR():
@@ -210,9 +210,9 @@ def sweep():
     rep += '<h1>Deduced BGPs</h1><p>('+str(ctx.nlast)+' more recents)</p><table cellspacing="1" border="1" cellpadding="5"  width="100%">\n'
     rep += '<thead><td></td><td>ip</td><td>time</td><td width="35%">bgp</td><td  width="45%">Original query</td><td>Precision</td><td>Recall</td>'
     rep += '</thead>\n'
-    nb = len(ctx.sweep.memory)
+    (nb, memory) = ctx.sweep.getMemory()
     for j in range(min(nb,ctx.nlast)):
-        (i,idQ, t,ip,query,bgp,precision,recall) = ctx.sweep.memory[nb-j-1]
+        (i,idQ, t,ip,query,bgp,precision,recall) = memory[nb-j-1]
         if i==0:
             rep +='<tr><td>'+str(nb-j)+'</td><td>'+bgp.client+'</td><td>'+str(bgp.time)+'</td><td>'
             for (s,p,o) in [(tp.s,tp.p,tp.o) for tp in bgp.tp_set]:

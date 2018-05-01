@@ -198,6 +198,7 @@ class SpaceSavingCounter:
 if __name__ == '__main__':
     print('main')
     ssa = SpaceSavingCounter(3)
+    print(ssa.queryTopK(2))
     for car in ['x','y','t','y','x','s','y','z','y','x','s','z','y','x','x']: ssa.add(car)
 
     print(ssa.monitored)
@@ -205,3 +206,5 @@ if __name__ == '__main__':
         c.print()
     print(ssa.queryFrequent(0.33))
     print(ssa.queryTopK(2))
+
+

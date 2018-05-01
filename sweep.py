@@ -119,6 +119,9 @@ class TriplePatternQuery(TripplePattern):
         if isinstance(self.o, Variable):
             self.o = Variable("o"+str(i).replace("-", "_"))
 
+    def isTriple(self):
+        return not(isinstance(self.s, Variable) or isinstance(self.p, Variable) or isinstance(self.o, Variable))
+
     def sign(self):
         if isinstance(self.s, Variable):
             s = Variable("s")
@@ -137,6 +140,7 @@ class TriplePatternQuery(TripplePattern):
     def nestedLoopOf2(self,baseTPQ):
         # 1:sp->sp 2:so->so 3:s->s 4:so->os 5:s->o 6:o->s 8:po->po 9:p->p 10:sp->po
         # 0/1/2/3 ->(0/1/2/3,0/1/2/3,0/1/2/3)
+        # HEURISTIQUE : on donne la priorité au motif en étoile sur le sujet !
         base = (None,baseTPQ.s,baseTPQ.p,baseTPQ.o)
         if  self.s in baseTPQ.sm: 
             if self.p in baseTPQ.pm: nl = ( 2 , (1,2,0) ) # sp->sp
@@ -183,10 +187,8 @@ class BasicGraphPattern:
             self.add(tpq)
 
     def add(self, tpq, sgn=None):
-        assert isinstance(
-            tpq, TriplePatternQuery), "BasicGraphPattern.Add : Pb type TPQ"
-        assert (self.client == 'Unknown') or (self.client ==
-                                              tpq.client), "BasicGraphPattern.Add : client différent"
+        assert isinstance(tpq, TriplePatternQuery), "BasicGraphPattern.Add : Pb type TPQ"
+        assert (self.client == 'Unknown') or (self.client == tpq.client), "BasicGraphPattern.Add : client différent"
         assert tpq.time - self.time <= self.gap, "BasicGraphPattern.Add : TPQ pas dans le gap"
         if self.client == 'Unknown':
             self.client = tpq.client
@@ -295,16 +297,18 @@ def processAgregator(in_queue, out_queue, ctx):
     elist = dict()
     print('[processAgregator] Started :\n\t- entry_timeout :',entry_timeout,'\n\t- purge_timeout : ',purge_timeout)
     try:
+
         inq = in_queue.get()
+
         while inq is not None:
             (id, x, val) = inq
             if x == SWEEP_IN_ENTRY:
-                print('[processAgregator] New Entry')
+                # print('[processAgregator] New Entry')
                 (s, p, o, t, cl) = val
                 currentTime = now()
                 elist[id] = (s, p, o, currentTime, cl, set(), set(), set())
             elif x == SWEEP_IN_DATA:
-                print('[processAgregator] New Data In')
+                # print('[processAgregator] New Data In')
                 if id in elist:  # peut être absent car purgé
                     (s, p, o, t, _, sm, pm, om) = elist[id]
                     (xs, xp, xo) = val
@@ -313,16 +317,16 @@ def processAgregator(in_queue, out_queue, ctx):
                     if isinstance(p, Variable): pm.add(xp)
                     if isinstance(o, Variable): om.add(xo)
             elif x == SWEEP_IN_END:
-                print('[processAgregator] In ended')
+                # print('[processAgregator] In ended')
                 mss = elist.pop(id, None)
                 if mss is not None:  # peut être absent car purgé
                     out_queue.put((id, mss))
             elif x == SWEEP_IN_LOG:
-                print('[processAgregator] New Log Entry')
+                # print('[processAgregator] New Log Entry')
                 out_queue.put((id, val))
             else:  # SWEEP_PURGE...
-                print('[processAgregator] purge (%d waiting entries)'%len(elist))
-                out_queue.put((id, SWEEP_PURGE))
+                # print('[processAgregator] purge (%d waiting entries)'%len(elist))
+                pass
 
             # purge les entrées trop vieilles !
             old = []
@@ -346,7 +350,6 @@ def processAgregator(in_queue, out_queue, ctx):
     finally:
         for v in elist:
             out_queue.put((v, elist.pop(v)))
-        out_queue.put((0, SWEEP_PURGE))
     out_queue.put(None)
     print('[processAgregator] Stopped')
 
@@ -355,16 +358,19 @@ def processAgregator(in_queue, out_queue, ctx):
 
 def processBGPDiscover(in_queue, val_queue, ctx):
     gap = ctx.gap
+    purge_timeout = (ctx.gap*SWEEP_PURGE_TIMEOUT).total_seconds()
     BGP_list = []
     print('[processBGPDiscover] Started')
     try:
+
         entry = in_queue.get()
+
         while entry != None:
             (id, val) = entry
             if val == SWEEP_PURGE:
-                print('[BGPDiscover] Purge (%d waiting BGPs)'%len(BGP_list))
-                val_queue.put((SWEEP_PURGE, 0, None))
-
+                # print('[BGPDiscover] Purge (%d waiting BGPs)'%len(BGP_list))
+                # val_queue.put((SWEEP_PURGE, 0, None))
+                pass
             else:
                 # print('[BGPDiscover] TPQ Analysys')
                 (s, p, o, time, client, sm, pm, om) = val
@@ -441,7 +447,12 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                 val_queue.put((SWEEP_IN_BGP, -1, bgp))
             BGP_list = recent
             ctx.nbBGP.value = len(BGP_list)
-            entry = in_queue.get()
+
+            try:
+                entry = in_queue.get(timeout=purge_timeout )
+            except Empty:
+                entry = (0, SWEEP_PURGE)  
+
     except KeyboardInterrupt:
         # penser à purger les derniers BGP ou uniquement autoutr du get pour gérer fin de session
         pass
@@ -450,7 +461,7 @@ def processBGPDiscover(in_queue, val_queue, ctx):
             val_queue.put((SWEEP_IN_BGP, -1, bgp))
         BGP_list.clear()
         ctx.nbBGP.value = 0
-        val_queue.put((SWEEP_PURGE, 0, None))
+        # val_queue.put((SWEEP_PURGE, 0, None))
     val_queue.put(None)
     print('[processBGPDiscover] Stopped')
 
@@ -458,14 +469,14 @@ def processBGPDiscover(in_queue, val_queue, ctx):
 
 
 def testPrecisionRecallBGP(queryList, bgp, gap):
+    # print('====================================')
     best = 0
     test = [(tp.s, tp.p, tp.o) for tp in bgp.tp_set]
     # print(test)
     best_precision = 0
     best_recall = 0
     for i in queryList:
-        ((time, ip, query, qbgp, queryID),
-         old_bgp, precision, recall) = queryList[i]
+        ((time, ip, query, qbgp, queryID), old_bgp, precision, recall) = queryList[i]
 
         if SWEEP_DEBUB_PR:
             rep = ''
@@ -483,10 +494,8 @@ def testPrecisionRecallBGP(queryList, bgp, gap):
                     best_precision = precision2
                     best_recall = recall2
     if best > 0:
-        ((time, ip, query, qbgp, queryID), old_bgp,
-         precision, recall) = queryList[best]
-        queryList[best] = ((time, ip, query, qbgp, queryID),
-                           bgp, best_precision, best_recall)
+        ((time, ip, query, qbgp, queryID), old_bgp, precision, recall) = queryList[best]
+        queryList[best] = ((time, ip, query, qbgp, queryID), bgp, best_precision, best_recall)
         if SWEEP_DEBUB_PR:
             print('association:', queryID, best_precision, best_recall)
             bgp.print()
@@ -501,18 +510,19 @@ def testPrecisionRecallBGP(queryList, bgp, gap):
 def processValidation(in_queue, memoryQueue, ctx):
     valGap = ctx.gap * 2
     gap = ctx.gap
+    purge_timeout = (ctx.gap*SWEEP_PURGE_TIMEOUT).total_seconds()
     currentTime = now()
     queryList = OrderedDict()
     print('[processValidation] Started :\n\t- gap :',gap,'\n\t- valGap : ',valGap)
     try:
         inq = in_queue.get()
+
         while inq is not None:
             (mode, id, val) = inq
 
             if mode == SWEEP_IN_QUERY:
-                print('[processValidation] Query analysis')
-                with ctx.lck:
-                    ctx.stat['nbQueries'] += 1
+                # print('[processValidation] Query analysis')
+                ctx.stat['nbQueries'] += 1
                 (time, ip, query, qbgp, queryID) = val
                 currentTime = now()
                 if SWEEP_DEBUB_PR:
@@ -520,38 +530,44 @@ def processValidation(in_queue, memoryQueue, ctx):
                     print(currentTime, ' New query', val)
                 (precision, recall, bgp) = (0, 0, None)
                 queryList[id] = ((time, ip, query, qbgp, queryID), bgp, precision, recall)
+                # print('[processValidation] Query added')
 
             elif mode == SWEEP_IN_BGP:
-                print('[processValidation] BGP Analysis')
-                ctx.stat['nbBGP'] += 1
                 bgp = val
-                currentTime = now()
-                if SWEEP_DEBUB_PR:
-                    print('+++')
-                    print(currentTime, ' New BGP')
-                    val.print()
-                old_bgp = testPrecisionRecallBGP(queryList, bgp, gap)
-                if SWEEP_DEBUB_PR:
-                    if old_bgp is not None:
-                        print('BGP not associated and archieved :')
-                        old_bgp.print()
-                if old_bgp is not None:
-                    memoryQueue.put( (4,  (0, 'none', old_bgp.birthTime, old_bgp.client, None, None, old_bgp, 0, 0) ) )                      
+                # print('[processValidation] BGP Analysis')
+                if bgp is not None: # HEURISTIQUE : Un BGP qui contient un simple triplet n'est pas valide
+                    if (len(bgp.input_set) ==1) and bgp.tp_set[0].isTriple() :
+                        # print("=================>     BGP not inserted")
+                        # bgp.print()
+                        pass
+                    else:
+                        ctx.stat['nbBGP'] += 1
+                        currentTime = now()
+                        if SWEEP_DEBUB_PR:
+                            print('+++')
+                            print(currentTime, ' New BGP')
+                            val.print()
+                        old_bgp = testPrecisionRecallBGP(queryList, bgp, gap)
+                        if SWEEP_DEBUB_PR:
+                            if old_bgp is not None:
+                                print('BGP not associated and archieved :')
+                                old_bgp.print()
+                        if old_bgp is not None:
+                            memoryQueue.put( (4,  (0, 'none', old_bgp.birthTime, old_bgp.client, None, None, old_bgp, 0, 0) ) )                      
+                # print('[processValidation] BGP added')
 
             # dans le cas où le client TPF n'a pas pu exécuter la requête...
             elif mode == SWEEP_OUT_QUERY:
-                print('[processValidation] Query deletion')
+                # print('[processValidation] Query deletion')
                 # suppress query 'queryID'
                 for i in queryList:
-                    ((time, ip, query, qbgp, queryID),
-                     bgp, precision, recall) = queryList[i]
+                    ((time, ip, query, qbgp, queryID), bgp, precision, recall) = queryList[i]
                     if queryID == val:
                         if SWEEP_DEBUB_PR:
                             print('---')
                             print(currentTime, ' Deleting query', queryID)
                         queryList.pop(i)
-                        with ctx.lck:
-                            ctx.stat['nbQueries'] -= 1
+                        ctx.stat['nbQueries'] -= 1
                         if bgp is not None:
                             if SWEEP_DEBUB_PR:
                                 print('-')
@@ -565,28 +581,28 @@ def processValidation(in_queue, memoryQueue, ctx):
                                 print('-')
                                 print('No BGP to extract')
                         break
+                # print('[processValidation] Query deleted')
 
             else:  # mode == SWEEP_PURGE
-                print('[processValidation] Purge (%d waiting queries)'%len(queryList))
+                # print('[processValidation] Purge (%d waiting queries)'%len(queryList))
                 currentTime = now()
 
             # Suppress older queries
+            # print('[processValidation] Trying to suppress oldest queries (%d waiting queries)'%len(queryList))
             old = []
             for id in queryList:
-                ((time, ip, query, qbgp, queryID), bgp,
-                 precision, recall) = queryList[id]
+                ((time, ip, query, qbgp, queryID), bgp, precision, recall) = queryList[id]
                 if currentTime - time > valGap:
                     old.append(id)
 
             for id in old:
                 ((time, ip, query, qbgp, queryID), bgp, precision, recall) = queryList.pop(id)
                 if SWEEP_DEBUB_PR:
-                    print('--- purge ', queryID, '(', time, ') ---',
-                          precision, '/', recall, '---', ' @ ', currentTime, '---')
+                    print('--- purge ', queryID, '(', time, ') ---', precision, '/', recall, '---', ' @ ', currentTime, '---')
                     print(query)
                     print('---')
                 #---
-                assert ip == bgp.client, 'Client Query différent de client BGP'
+                assert (bgp is None) or (ip == bgp.client), 'Client Query différent de client BGP'
                 #---
                 memoryQueue.put( (4, (id, queryID, time, ip, query, qbgp, bgp, precision, recall)) )
                 ctx.stat['sumRecall'] += recall
@@ -594,7 +610,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                 ctx.stat['sumQuality'] += (recall+precision)/2
                 if bgp is not None:
                     if SWEEP_DEBUB_PR:
-                        print(".\n".join([toStr(s, p, o) for (itp, (s, p, o), sm, pm, om) in bgp.tp_set]))
+                        print(".\n".join( [tp.toStr() for tp in bgp.tp_set]) )
                     ctx.stat['sumSelectedBGP'] += 1
                 else:
                     if SWEEP_DEBUB_PR:
@@ -603,9 +619,13 @@ def processValidation(in_queue, memoryQueue, ctx):
                     print('--- --- @'+ip+' --- ---')
                     print(' ')
             ctx.nbREQ.value = len(queryList)
-            inq = in_queue.get()
+
+            try:
+                inq = in_queue.get(timeout=purge_timeout )
+            except Empty:
+                inq = (SWEEP_PURGE, 0, None)  
+
     except KeyboardInterrupt:
-        # penser à afficher les dernières queries ou uniquement autour du get pour fin de session
         pass
     finally:
         for id in queryList:
@@ -616,7 +636,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                 print(query)
                 print('---')
             #---
-            assert ip == bgp.client, 'Client Query différent de client BGP'
+            assert (bgp is None) or (ip == bgp.client), 'Client Query différent de client BGP'
             #---
             memoryQueue.put( (4, (id, queryID, time, ip, query, qbgp, bgp, precision, recall)) )
             ctx.stat['sumRecall'] += recall
@@ -656,7 +676,7 @@ def addBGP2Rank(bgp, nquery, line, precision, recall, ranking):
 # - faire une sauvegarde incrémentale pour permettre de ne concervé que ce qui est nécessaire pour la mémoire à court terme.
 # - faire aussi les deux mémoires pour les requêtes
 
-def processMemory(ctx, duration, inQueue, outQueue):
+def processMemory(ctx, duration, inQueue):
     sscBGP = SpaceSavingCounter(ctx.memSize)
     sscQueries  = SpaceSavingCounter(ctx.memSize)
     lastTimeMemorySaved = ctx.startTime
@@ -675,26 +695,15 @@ def processMemory(ctx, duration, inQueue, outQueue):
             (mode,mess) = inq
 
             if ((mode==0) and (nbMemoryChanges > 0)) or (nbMemoryChanges > 10): # Save memory in a CSV file
-                print('[processMemory] Save (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
-                with ctx.lck:
-                    ref = lastTimeMemorySaved
-                    saveMemory(ctx.memory,ref)
-                lastTimeMemorySaved = now()
+                # print('[processMemory] Save (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
+                ctx.saveMemory()
                 nbMemoryChanges = 0
 
-            if mode==1:
-                (g,o,tpk) = sscQueries.queryTopK(mess)
-                outQueue.put( [sscQueries.monitored[e] for e in tpk] )
-
-            elif mode==2:
-                (g,o,tpk) = sscBGP.queryTopK(mess)
-                outQueue.put( [sscBGP.monitored[e] for e in tpk] )
-
-            elif mode==4:
-                print('[processMemory] new Entry in memory (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
+            if mode==4:
+                # print('[processMemory] new Entry in memory (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
                 (id, queryID, time, ip, query, qbgp, bgp, precision, recall) = mess
 
-                ctx.memory.append( (id, queryID, time, ip, query, bgp, precision, recall) )
+                ctx.memory.append( ( now() , id, queryID, time, ip, query, bgp, precision, recall) )
                 nbMemoryChanges += 1
 
                 if query is not None :
@@ -702,6 +711,11 @@ def processMemory(ctx, duration, inQueue, outQueue):
                     with ctx.lck: 
                         addBGP2Rank(sbgp, query, id, precision, recall, ctx.rankingQueries)
                     sscQueries.add(hashBGP(sbgp),sbgp)
+                    (g,o,tpk) = sscQueries.queryTopK(ctx.memSize)
+                    while len(ctx.topKQueries) > 0: ctx.topKQueries.pop(0)
+                    with ctx.lck :
+                        for e in tpk:
+                            ctx.topKQueries.append(sscQueries.monitored[e])
 
                 if bgp is not None :
                     sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
@@ -709,20 +723,25 @@ def processMemory(ctx, duration, inQueue, outQueue):
                         with ctx.lck: 
                             addBGP2Rank(sbgp, query, id, 0, 0, ctx.rankingBGPs)
                         sscBGP.add(hashBGP(sbgp),sbgp)
+                        (g,o,tpk) = sscBGP.queryTopK(ctx.memSize)
+                        while len(ctx.topKBGPs) > 0: ctx.topKBGPs.pop(0)
+                        with ctx.lck :
+                            for e in tpk:
+                                ctx.topKBGPs.append(sscBGP.monitored[e])
+
             else:
-                print('[processMemory] Purge (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
+                pass
+                # print('[processMemory] Purge (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
 
             maxNbMemory = max(maxNbMemory, len(ctx.memory))
             maxRankingBGPs = max( maxRankingBGPs, len(ctx.rankingBGPs) ) 
             maxRankingQueries = max( maxRankingQueries, len(ctx.rankingQueries) )
-
+            
             # Oldest elements in short memory are deleted
             threshold = now() - ctx.memDuration
             with ctx.lck:
                 while len(ctx.memory)>0 :
-                    (id, queryID, time, ip, query, bgp, precision, recall) = ctx.memory[0]
-                    if bgp is not None : t = bgp.time
-                    else: t = time
+                    (t, id, queryID, time, ip, query, bgp, precision, recall) = ctx.memory[0]
                     if t < threshold : ctx.memory.pop(0)
                     else: break
                 i = 0
@@ -737,36 +756,10 @@ def processMemory(ctx, duration, inQueue, outQueue):
                     else: i += 1
 
     except KeyboardInterrupt:
-        if nbMemoryChanges > 0: 
-            with ctx.lck: 
-                saveMemory(ctx.memory,lastTimeMemorySaved)
+        if nbMemoryChanges > 0: ctx.saveMemory()
+        pass
 
     print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size  ',maxRankingBGPs ,'\n\t- max Queries ranking size  ',maxRankingQueries )
-
-def saveMemory(memory, lastTimeMemorySaved):
-    file = 'sweep.csv'  # (id, time, ip, query, bgp, precision, recall)
-    sep = '\t'
-    exists = existFile(file)
-    if exists: mode = "a"
-    else: mode="w"
-    print('Saving memory ',mode)
-    try:
-        with open(file, mode, encoding='utf-8') as f:
-            fn = ['id', 'qID', 'time', 'ip', 'query', 'bgp', 'precision', 'recall']
-            writer = csv.DictWriter(f, fieldnames=fn, delimiter=sep)
-            if not(exists): writer.writeheader()
-            for (id, queryID, t, ip, query, bgp, precision, recall) in memory:
-                if t > lastTimeMemorySaved:
-                    if bgp is not None:
-                        bgp_txt = ".\n".join([tp.toStr() for tp in bgp.tp_set])
-                    else:
-                        bgp_txt = "..."
-                    if query is None: query='...'
-                    s = {'id': id, 'qID': queryID, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
-                    writer.writerow(s)
-        print('Memory saved')
-    except KeyboardInterrupt:
-        print('Interupted')
 
 #==================================================
 
@@ -780,25 +773,23 @@ class SWEEP:  # Abstract Class
         self.optimistic = opt  # màj de la date du BGP avec le dernier TP reçu ?
 
         self.lck = mp.Lock()
-        manager = mp.Manager()
+        self.manager = mp.Manager()
  
-        self.memory = manager.list()
-        self.rankingBGPs = manager.list()
-        self.rankingQueries = manager.list()
+        self.memory = self.manager.list()
+        self.lastTimeMemorySaved = now()
+        self.topKBGPs = self.manager.list()
+        self.topKQueries = self.manager.list()
+        self.rankingBGPs = self.manager.list()
+        self.rankingQueries = self.manager.list()
         self.startTime = now()
         self.memSize = mem # for long term memory (ssc)
         self.memDuration = 10*gap # for short term memory
-
-        # self.avgPrecision = mp.Value('f',0.0)
-        # self.avgRecall = mp.Value('f',0.0)
-        # self.avgQual = mp.Value('f',0.0)
-        # self.Acuteness = mp.Value('f',0.0)
 
         self.nbBGP = mp.Value('i', 0)
         self.nbREQ = mp.Value('i', 0)
 
         self.qId = mp.Value('i', 0)
-        self.stat = manager.dict({'sumRecall': 0, 'sumPrecision': 0,
+        self.stat = self.manager.dict({'sumRecall': 0, 'sumPrecision': 0,
                                   'sumQuality': 0, 'nbQueries': 0, 'nbBGP': 0, 'sumSelectedBGP': 0})
 
         self.dataQueue = mp.Queue()
@@ -806,7 +797,6 @@ class SWEEP:  # Abstract Class
         self.validationQueue = mp.Queue()
 
         self.memoryInQueue = mp.Queue()
-        self.memoryOutQueue = mp.Queue()
 
         self.dataProcess = mp.Process(target=processAgregator, args=(
             self.dataQueue, self.entryQueue, self))
@@ -814,7 +804,7 @@ class SWEEP:  # Abstract Class
             self.entryQueue, self.validationQueue, self))
         self.validationProcess = mp.Process(
             target=processValidation, args=(self.validationQueue, self.memoryInQueue, self))
-        self.memoryProcess = mp.Process(target=processMemory, args=(self, gap*3, self.memoryInQueue, self.memoryOutQueue))
+        self.memoryProcess = mp.Process(target=processMemory, args=(self, gap*3, self.memoryInQueue))
 
         self.dataProcess.start()
         self.entryProcess.start()
@@ -866,15 +856,13 @@ class SWEEP:  # Abstract Class
 
     def getTopKBGP(self,n):
         with self.lck:
-            self.memoryInQueue.put( (2,n) )
-            tpk = self.memoryOutQueue.get()
-        return tpk
+            res = self.topKBGPs[:n]
+        return res
 
     def getTopKQueries(self,n):
         with self.lck:
-            self.memoryInQueue.put( (1,n) )
-            tpk = self.memoryOutQueue.get()
-        return tpk
+            res = [e for e in self.topKQueries]
+        return res[:n]
 
     def getRankingBGPs(self) :
         return self.cloneRanking(self.rankingBGPs)
@@ -883,11 +871,47 @@ class SWEEP:  # Abstract Class
         return self.cloneRanking(self.rankingQueries)
 
     def cloneRanking(self, ranking) :
+        # print('Début clone Ranking')
         res = []
         with self.lck:
             for (t, d, n, query, ll, p, r) in ranking:
                 res.append( (t, d, n, query, ll, p, r) )
+        # print('Fin clone Ranking')
         return res
+
+    def getMemory(self):
+        # print('Début get memory')
+        with self.lck:
+            r = [(id, queryID, time, ip, query, bgp, precision, recall) for (t, id, queryID, time, ip, query, bgp, precision, recall) in self.memory]
+        # print('Fin get memory')
+        return (len(r), r )
+
+    def saveMemory(self):
+        file = 'sweep.csv'  # (id, time, ip, query, bgp, precision, recall)
+        sep = '\t'
+        exists = existFile(file)
+        if exists: mode = "a"
+        else: mode="w"
+        print('Saving memory ',mode)
+        try:
+            with open(file, mode, encoding='utf-8') as f:
+                fn = ['id', 'qID', 'time', 'ip', 'query', 'bgp', 'precision', 'recall']
+                writer = csv.DictWriter(f, fieldnames=fn, delimiter=sep)
+                if not(exists): writer.writeheader()
+                with self.lck:
+                    for (t, id, queryID, t, ip, query, bgp, precision, recall) in self.memory:
+                        if t > self.lastTimeMemorySaved:
+                            if bgp is not None:
+                                bgp_txt = ".\n".join([tp.toStr() for tp in bgp.tp_set])
+                            else:
+                                bgp_txt = "..."
+                            if query is None: query='...'
+                            s = {'id': id, 'qID': queryID, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
+                            writer.writerow(s)
+            self.lastTimeMemorySaved = now()
+            print('Memory saved')
+        except KeyboardInterrupt:
+            print('Interupted')
 
 #==================================================
 
