@@ -1,7 +1,7 @@
 #!/usr/bin/env python3.6
 # coding: utf8
 """
-Tools to manage statistics on processes
+Tools to manage frequent elements
 """
 #    Copyright (C) 2017 by
 #    Emmanuel Desmontils <emmanuel.desmontils@univ-nantes.fr>
@@ -20,7 +20,6 @@ Tools to manage statistics on processes
 from pprint import pprint
 from collections import OrderedDict
 import math
-import multiprocessing as mp
 
 #==================================================
 
@@ -110,7 +109,6 @@ class SpaceSavingCounter:
 
         # self.continuousQueryFrequent(c)
         # self.continuousQueryTopK(c)
-
         # self.print()
 
     def print(self):
@@ -188,6 +186,7 @@ class SpaceSavingCounter:
         return (guaranteed, order, tk)
 
     def continuousQueryTopK(self,c):
+        #todo
         pass
 
 

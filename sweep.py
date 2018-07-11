@@ -15,6 +15,8 @@ import multiprocessing as mp
 import datetime as dt
 import time
 
+import signal
+
 import csv
 from tools.tools import now, fromISO, existFile
 
@@ -759,7 +761,7 @@ def processMemory(ctx, duration, inQueue):
         if nbMemoryChanges > 0: ctx.saveMemory()
         pass
 
-    print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size  ',maxRankingBGPs ,'\n\t- max Queries ranking size  ',maxRankingQueries )
+    print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size : ',maxRankingBGPs ,'\n\t- max Queries ranking size : ',maxRankingQueries )
 
 #==================================================
 
@@ -892,6 +894,7 @@ class SWEEP:  # Abstract Class
         exists = existFile(file)
         if exists: mode = "a"
         else: mode="w"
+        maxt = self.lastTimeMemorySaved
         print('Saving memory ',mode)
         try:
             with open(file, mode, encoding='utf-8') as f:
@@ -901,6 +904,7 @@ class SWEEP:  # Abstract Class
                 with self.lck:
                     for (t, id, queryID, t, ip, query, bgp, precision, recall) in self.memory:
                         if t > self.lastTimeMemorySaved:
+                            maxt = max(t,self.lastTimeMemorySaved)
                             if bgp is not None:
                                 bgp_txt = ".\n".join([tp.toStr() for tp in bgp.tp_set])
                             else:
@@ -908,10 +912,46 @@ class SWEEP:  # Abstract Class
                             if query is None: query='...'
                             s = {'id': id, 'qID': queryID, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
                             writer.writerow(s)
-            self.lastTimeMemorySaved = now()
+            self.lastTimeMemorySaved = maxt
             print('Memory saved')
         except KeyboardInterrupt:
-            print('Interupted')
+            print('Interupted') 
+
+
+class GracefulInterruptHandler(object):
+
+    def __init__(self, sig=signal.SIGINT):
+        self.sig = sig
+
+    def __enter__(self):
+
+        self.interrupted = False
+        self.released = False
+
+        self.original_handler = signal.getsignal(self.sig)
+
+        def handler(signum, frame):
+            self.release()
+            self.interrupted = True
+
+        signal.signal(self.sig, handler)
+
+        return self
+
+    def __exit__(self, type, value, tb):
+        self.release()
+
+    def release(self):
+
+        if self.released:
+            return False
+
+        signal.signal(self.sig, self.original_handler)
+
+        self.released = True
+
+        return True
+
 
 #==================================================
 

@@ -16,3 +16,7 @@ res
 __pycache__/sweep.cpython-36.pyc
 .vscode/launch.json
 .vscode/settings.json
+
+*.pyc
+
+__pycache__/sweep.cpython-36.pyc

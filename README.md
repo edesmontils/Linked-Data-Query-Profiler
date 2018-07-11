@@ -26,7 +26,7 @@ and then install Python:
 brew install python
 ```
 #### Ubuntu
-```
+```bash
 sudo apt-get install python-dev python-setuptools
 ```
 
@@ -307,7 +307,7 @@ The client is now available at : http://127.0.0.1:5002
 
 #### Command lines
 
-```
+```bash
 $ python3.6 sweep-streamWS.py -h
 usage: sweep-streamWS.py [-h] [-g GAP] [-to TIMEOUT] [-o] [-l NLAST]
                          [--port PORT] [--chglientMode]
@@ -328,7 +328,7 @@ optional arguments:
 ```
 
 
-```
+```bash
 $ python3.6 qsim-WS.py -h
 usage: qsim-WS.py [-h] [--sweep SWEEP] [-s TPFSERVER] [-c TPFCLIENT] [-v]
                   [-g GAP] [-to TIMEOUT] [--port PORT]

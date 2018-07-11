@@ -38,6 +38,8 @@ import requests as http
 from urllib.parse import urlparse, quote_plus
 from configparser import ConfigParser, ExtendedInterpolation
 
+from scipy.stats import uniform
+
 
 class Context(object):
     """docstring for Context"""
@@ -74,6 +76,7 @@ class Context(object):
 
 
 ctx = Context()
+randomU = uniform()
 
 #==================================================	
 
@@ -89,8 +92,45 @@ TPF_CLIENT_TEMPO = 0.01 # sleep duration if client fails
 
 #==================================================
 
-def play(file,ctx,nb_processes, dataset, nbq,offset):
+def distributeUniform(ctx, base, period, nbq) :
+    delta = min(1.5*ctx.gap,period / nbq)
+    print(delta)
+    return [base+(delta*n) for n in range(nbq)]
+
+def distributeUniformRandom(ctx, base, period, nbq) :
+    l = randomU.rvs(size=nbq)
+    l.sort()
+    return [base+(period*x) for x in l]
+
+def timeDispatcher(entryList, ctx,nbq,period) :
+    (_,_, firstTime) = entryList[0]
+    (_,_, lastTime) = entryList[nbq-1]
+
+    deltaTime = lastTime-firstTime
+
+    # distrib = distributeUniform(ctx,firstTime,period,nbq)
+    # print([d.isoformat() for d in distrib])
+    distrib = distributeUniformRandom(ctx,firstTime,period,nbq)
+
+    if (nbq>1) and (deltaTime == dt.timedelta(minutes=0)) :
+        
+        print('For %d queries, time interval is :'%nbq)
+        print('\t',[d.isoformat() for d in distrib])
+        n = 0
+        for (no,e,date) in entryList:
+            ndate = distrib[n]
+            n += 1
+            e.set('datetime',ndate.isoformat())
+            print('\t',n, ' - ', ndate)
+    else: 
+        # print('ok')
+        pass
+    return (firstTime,lastTime)
+
+
+def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
     compute_queue = mp.Queue(nb_processes)
+    result_queue = mp.Queue()
     print('Traitement de %s' % file)
     parser = etree.XMLParser(recover=True, strip_cdata=True)
     tree = etree.parse(file, parser)
@@ -101,62 +141,97 @@ def play(file,ctx,nb_processes, dataset, nbq,offset):
     #---
     print('DTD valide !')
 
-    nbe = 0 # nombre d'entries traitées
     n = 0 # nombre d'entries vues
     date = 'no-date'
     ip = 'ip-'+tree.getroot().get('ip').split('-')[0]
-    for entry in tree.getroot():
-        if entry.tag == 'entry':
-            n += 1
-            if n>=offset:
-                nbe += 1
-                if nbe == 1:
-                    date_ref = fromISO(entry.get('datetime'))
-                    current_date = dt.datetime.now()
-                    processes = []
-                    for i in range(nb_processes):
-                        p = mp.Process(target=run, args=(compute_queue, ctx, dataset))
-                        processes.append(p)
-                    for p in processes:
-                        p.start()
-                date = fromISO(entry.get('datetime'))
-                ide = entry.get('logline')
-                valid = entry.get("valid")
-                if valid is not None :
-                    if valid in ['TPF','EmptyTPF'] :
-                        date = current_date+(date-date_ref)
-                        print('(%d) new entry to add - executed at %s' % (n,date))
-                        rep = ''
-                        for x in entry :
-                            if x.tag == 'bgp':
-                                if len(x)>0:
-                                    rep += etree.tostring(x).decode('utf-8')
-                        # print(rep)
-                        compute_queue.put( (n, entry.find('request').text, rep, date )  ) 
-                    else: print('(%d) entry not executed : %s' % (n,valid))
-                else: print('(%d) entry not executed (not validated)' % n)   
-                if nbq>0 and nbe >= nbq : break
-        else:
-            pass
 
-    if nbe>0: 
+    # validQueries in (TPF|SPARQL|EmptyTPF|EmptySPARQL|QBFTPF|QBFSPARQL|TOTPF|TOSPARQL|NotTested) with "NotTested" by default
+    validQueries = ['TPF','NotTested']
+    if doEmpty: validQueries.append('EmptyTPF')
+
+    nbEntries = 0
+    n = 0
+    entryList = []
+    for e in tree.findall('entry') :
+        if (nbEntries<nbq) and (n>=offset):
+            if e.get("valid") in validQueries :
+                entryList.append( (n,e, fromISO(e.get('datetime')) )  )
+                nbEntries += 1
+        n += 1
+        if n>offset+nbq: break
+
+    nbq = nbEntries
+
+    print(len(entryList), ' valid entries')
+    print(nbq, ' entries to treat')
+
+    if (nbq>0) and (nbEntries > 0) : 
+
+        (firstTime,lastTime) = timeDispatcher(entryList,ctx,nbq,period)
+
+        current_date = dt.datetime.now()
+        processes = []
+        for i in range(nb_processes):
+            p = mp.Process(target=run, args=(compute_queue,result_queue, ctx, dataset))
+            processes.append(p)
+        for p in processes:
+            p.start()
+
+        result = []
+
+        n = 0
+        for (no,entry,_) in  entryList:
+            n += 1
+            date = current_date+(fromISO(entry.get('datetime'))-firstTime)
+
+            print('(%d) new entry to add - executed at %s' % (n,date))
+            rep = ''
+            for x in entry :
+                if x.tag == 'bgp':
+                    if len(x)>0:
+                        rep += etree.tostring(x).decode('utf-8')
+            compute_queue.put( (n, no, entry.find('request').text, rep, date, e.get("valid") )  ) 
+  
+            if nbq>0 and n >= nbq : break
+
+        
         for p in processes:
             compute_queue.put(None)
+
+        nbNone = 0
+        while nbNone <nb_processes:
+            inq = result_queue.get()
+            if inq is None:
+                nbNone += 1
+            else:
+                result.append(inq)
+
         for p in processes:
             p.join()
+
+        time.sleep(ctx.gap.total_seconds())
+        print('---')
+        print('%d queries treated on %d queries'%(nbq,nbEntries) )
+        for r in result :
+            (n,no,m,v) = r
+            print('=========> Query %s : %s / %s'%(no,m,v))
+        print('Fin de traitement de %s' % file)
+        time.sleep(ctx.gap.total_seconds())
 
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
 
-def run(inq, ctx, datasource):
+def run(inq, outq, ctx, datasource):
     sp = ctx.listeSP[datasource]
     qm = ctx.qm
     doPR = ctx.doPR
-    mss = inq.get()
     gap = ctx.gap
     sweep = ctx.sweep
+
+    mss = inq.get()
+
     while mss is not None:
-        (nbe,query, bgp_list,d) = mss
+        (nbe,noq,query, bgp_list,d, valid) = mss
         duration = max(dt.timedelta.resolution, d-dt.datetime.now())
         print('(%d)'%nbe,'Sleep:',duration.total_seconds(),' second(s)')
         time.sleep(duration.total_seconds())
@@ -176,7 +251,8 @@ def run(inq, ctx, datasource):
         bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
 
-        try:
+        try: # (TPF|SPARQL|EmptyTPF|EmptySPARQL|QBFTPF|QBFSPARQL|TOTPF|TOSPARQL|NotTested)
+
             for i in range(TPF_CLIENT_REDO): # We try the query TPF_CLIENT_REDO times beause of TPF Client problems 
                 try:
 
@@ -196,13 +272,16 @@ def run(inq, ctx, datasource):
                     processing = after - before
                     # print('(%d)'%nbe,':',rep)
                     if rep == []:
-                       print('(%d, %s sec.)'%(nbe,processing.total_seconds())," Empty query !!!")
+                       print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid)," Empty query !!!")
                        url = sweep+'/inform'
                        s = http.post(url,data={'data':mess,'errtype':'Empty', 'no':no})
+                       outq.put( (nbe, noq, "EmptyTPF",valid)  )
                     else: 
-                        print('(%d, %s sec.)'%(nbe,processing.total_seconds()),': [...]')#,rep)
-                    if processing > gap :
-                        print('(%d, %s sec.)'%(nbe,processing.total_seconds()),'!!!!!!!!! hors Gap (%s) !!!!!!!!!'%gap.total_seconds())
+                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),': [...]')#,rep)
+                        outq.put( (nbe, noq, "TPF",valid)  )
+                    if processing > gap:
+                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),'!!!!!!!!! hors Gap (%s) !!!!!!!!!'%gap.total_seconds())
+                        outq.put( (nbe, noq, "TOGAP",valid)  )
                     break
 
                 except TPFClientError as e :
@@ -226,6 +305,7 @@ def run(inq, ctx, datasource):
 
         except QueryBadFormed as e:
             print('(%d)'%nbe,'Query Bad Formed :',e)
+            outq.put( (nbe, noq, "QBFTPF",valid)  )
             if doPR:
                 url = sweep+'/inform'
                 s = http.post(url,data={'data':mess,'errtype':'QBF', 'no':no})
@@ -245,6 +325,7 @@ def run(inq, ctx, datasource):
 
         mss = inq.get()
 
+    outq.put(None)
 
 #==================================================
 #==================================================
@@ -263,6 +344,7 @@ if __name__ == '__main__':
     parser.add_argument("-to", "--timeout", type=float, default=None, dest="timeout",help="TPF Client Time Out in minutes (no timeout by default).")
     parser.add_argument("--host", default="127.0.0.1",dest="host", help="host ('127.0.0.1' by default)")
     parser.add_argument("--port", type=int, default=5002,dest="port", help="Port (5002 by default)")
+
     parser.add_argument("-f", "--config", default='',dest="cfg", help="Config file")
 
     parser.add_argument("-d", "--dataset", default=TPF_SERVEUR_DATASET, dest="dataset", help="TPF Server Dataset ('"+TPF_SERVEUR_DATASET+"' by default)")
@@ -270,6 +352,9 @@ if __name__ == '__main__':
     parser.add_argument('-n',"--nbQueries", type=int, default=0, dest="nbq", help="Max queries to study (0 by default, i.e. all queries)")
     parser.add_argument('-o',"--offset", type=int, default=0, dest="offset", help="first query to study (0 by default, i.e. all queries)")
 
+    parser.add_argument("--empty", default='', dest="doEmpty",action="store_true", help="Also run empty queries")
+
+    parser.add_argument("-i", type=float, default=60, dest="period", help="Period in minutes (60 by default)")
 
     args = parser.parse_args()
 
@@ -348,7 +433,7 @@ if __name__ == '__main__':
         file_set = args.files
         for file in file_set:
             if existFile(file):
-                play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset  )
+                play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset, args.doEmpty, dt.timedelta(minutes=args.period)  )
 
     except KeyboardInterrupt:
         pass
