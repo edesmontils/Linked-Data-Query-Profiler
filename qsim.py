@@ -153,12 +153,12 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
     n = 0
     entryList = []
     for e in tree.findall('entry') :
-        if (nbEntries<nbq) and (n>=offset):
+        if ((nbq==0) and (n>=offset)) or ((nbEntries<nbq) and (n>=offset)):
             if e.get("valid") in validQueries :
                 entryList.append( (n,e, fromISO(e.get('datetime')) )  )
                 nbEntries += 1
         n += 1
-        if n>offset+nbq: break
+        if (nbq>0) and (n>offset+nbq): break
 
     nbq = nbEntries
 
