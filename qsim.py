@@ -135,9 +135,9 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
     parser = etree.XMLParser(recover=True, strip_cdata=True)
     tree = etree.parse(file, parser)
     #---
-    dtd = etree.DTD('http://documents.ls2n.fr/be4dbp/log.dtd')
-    assert dtd.validate(tree), '%s non valide au chargement : %s' % (
-        file, dtd.error_log.filter_from_errors()[0])
+    #dtd = etree.DTD('http://documents.ls2n.fr/be4dbp/log.dtd')
+    #assert dtd.validate(tree), '%s non valide au chargement : %s' % (
+    #    file, dtd.error_log.filter_from_errors()[0])
     #---
     print('DTD valide !')
 

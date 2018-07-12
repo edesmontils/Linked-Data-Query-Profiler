@@ -123,9 +123,9 @@ def ex(datasource):
     else:
         return jsonify(result=d)
     #---
-    dtd = etree.DTD('http://documents.ls2n.fr/be4dbp/log.dtd')
-    assert dtd.validate(tree), 'non valide au chargement : %s' % (
-        dtd.error_log.filter_from_errors()[0])
+    #dtd = etree.DTD('http://documents.ls2n.fr/be4dbp/log.dtd')
+    #assert dtd.validate(tree), 'non valide au chargement : %s' % (
+    #    dtd.error_log.filter_from_errors()[0])
     #---
     # print('DTD valide !')
 
