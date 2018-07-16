@@ -21,7 +21,7 @@ import json
 import datetime as dt
 import argparse
 from tools.Endpoint import TPFEP, TPFClientError, TimeOut, QueryBadFormed, EndpointException
-from tools.tools import now, date2str
+from tools.tools import now, date2str, date2filename, existFile
 
 from lib.QueryManager import QueryManager
 from lib.bgp import serializeBGP2str
@@ -40,6 +40,7 @@ from configparser import ConfigParser, ExtendedInterpolation
 
 from scipy.stats import uniform
 
+import os.path
 
 class Context(object):
     """docstring for Context"""
@@ -356,6 +357,8 @@ if __name__ == '__main__':
 
     parser.add_argument("-i", type=float, default=60, dest="period", help="Period in minutes (60 by default)")
 
+    parser.add_argument("-u", "--user", default='',dest="user", help="In case of directory, play for this user (attempt a 'users.xml' file in the dir.")
+
     args = parser.parse_args()
 
     if (args.cfg == ''):
@@ -430,7 +433,29 @@ if __name__ == '__main__':
         print('Running qsim ')
 
         print('Start simulating with %d processes'%args.nb_processes)
+
+
         file_set = args.files
+        if (len(file_set)==1) and os.path.isdir(file_set[0]): 
+            print('Is Dir !!!!')
+            directory = file_set[0]
+            users = etree.parse(directory+'/users.xml', XMLparser)
+            user = args.user
+            file_set = []
+            print('On directory:',directory)
+            print('For user:',user)
+            for u in users.getroot():
+                if u.get('ip') == user:
+                    print('User finded')
+                    for t in u :
+                        if t.get('nb') != "0": 
+                            f = directory+ date2filename(t.get('t')) + '/' + user + '-be4dbp-tested-TPF.xml'
+                            if existFile(f): file_set.append( f )
+                    break;
+
+        print('Playing files :')
+        print(file_set)
+        
         for file in file_set:
             if existFile(file):
                 play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset, args.doEmpty, dt.timedelta(minutes=args.period)  )
