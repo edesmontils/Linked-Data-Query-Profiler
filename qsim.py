@@ -436,22 +436,25 @@ if __name__ == '__main__':
 
 
         file_set = args.files
-        if (len(file_set)==1) and os.path.isdir(file_set[0]): 
-            print('Is Dir !!!!')
+        
+        if (len(file_set)==1) and os.path.isdir(file_set[0]) :
+            #print('Is Dir !!!!')
             directory = file_set[0]
-            users = etree.parse(directory+'/users.xml', XMLparser)
-            user = args.user
-            file_set = []
-            print('On directory:',directory)
-            print('For user:',user)
-            for u in users.getroot():
-                if u.get('ip') == user:
-                    print('User finded')
-                    for t in u :
-                        if t.get('nb') != "0": 
-                            f = directory+ date2filename(t.get('t')) + '/' + user + '-be4dbp-tested-TPF.xml'
-                            if existFile(f): file_set.append( f )
-                    break;
+            users_file = directory+'/users.xml'
+            if existFile(users_file): 
+                users = etree.parse(users_file, XMLparser)
+                user = args.user
+                file_set = []
+                print('On directory:',directory)
+                print('For user:',user)
+                for u in users.getroot():
+                    if u.get('ip') == user:
+                        print('User finded')
+                        for t in u :
+                            if t.get('nb') != "0": 
+                                f = directory+ date2filename(t.get('t')) + '/' + user + '-be4dbp-tested-TPF.xml'
+                                if existFile(f): file_set.append( f )
+                        break;
 
         print('Playing files :')
         print(file_set)
