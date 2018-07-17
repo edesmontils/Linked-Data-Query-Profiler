@@ -731,6 +731,13 @@ def processMemory(ctx, duration, inQueue):
                             for e in tpk:
                                 ctx.topKBGPs.append(sscBGP.monitored[e])
 
+                if (query is not None) and (ip is not None) :
+                    if ip in ctx.usersMemory.keys():
+                        (nb, sumPrecision, sumRecall) = ctx.usersMemory[ip]
+                    else:
+                        (nb, sumPrecision, sumRecall) = (0,0,0)
+                    ctx.usersMemory[ip] = (nb+1,sumPrecision+precision, sumRecall+recall)
+
             else:
                 pass
                 # print('[processMemory] Purge (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
@@ -761,6 +768,15 @@ def processMemory(ctx, duration, inQueue):
         if nbMemoryChanges > 0: ctx.saveMemory()
         pass
 
+    with open('sweep_users.csv',"w", encoding='utf-8') as f:
+        fn=['ip','precision','recall']
+        writer = csv.DictWriter(f,fieldnames=fn,delimiter=',')
+        writer.writeheader()
+        for ip,v in ctx.usersMemory.items() :
+            v = (nb, sumPrecision, sumRecall) 
+            s = dict({'ip':ip, 'precision':precision,'recall':recall})
+            writer.writerow(s)
+
     print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size : ',maxRankingBGPs ,'\n\t- max Queries ranking size : ',maxRankingQueries )
 
 #==================================================
@@ -786,6 +802,8 @@ class SWEEP:  # Abstract Class
         self.startTime = now()
         self.memSize = mem # for long term memory (ssc)
         self.memDuration = 10*gap # for short term memory
+
+        self.usersMemory = self.manager.dict()
 
         self.nbBGP = mp.Value('i', 0)
         self.nbREQ = mp.Value('i', 0)
