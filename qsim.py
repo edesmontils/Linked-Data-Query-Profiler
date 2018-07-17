@@ -140,7 +140,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
     #assert dtd.validate(tree), '%s non valide au chargement : %s' % (
     #    file, dtd.error_log.filter_from_errors()[0])
     #---
-    print('DTD valide !')
+    #print('DTD valide !')
 
     n = 0 # nombre d'entries vues
     date = 'no-date'
@@ -148,7 +148,11 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
 
     # validQueries in (TPF|SPARQL|EmptyTPF|EmptySPARQL|QBFTPF|QBFSPARQL|TOTPF|TOSPARQL|NotTested) with "NotTested" by default
     validQueries = ['TPF','NotTested']
-    if doEmpty: validQueries.append('EmptyTPF')
+    if doEmpty: 
+        validQueries.append('EmptyTPF')
+        print('Empty queries computed')
+    else : 
+        print('Empty queries suppressed')
 
     nbEntries = 0
     n = 0
@@ -158,6 +162,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
             if e.get("valid") in validQueries :
                 entryList.append( (n,e, fromISO(e.get('datetime')) )  )
                 nbEntries += 1
+                # print(e.get("valid"))
         n += 1
         if (nbq>0) and (n>offset+nbq): break
 
@@ -185,13 +190,13 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
             n += 1
             date = current_date+(fromISO(entry.get('datetime'))-firstTime)
 
-            print('(%d) new entry to add - executed at %s' % (n,date))
+            print('(%d) new entry to add (%s)- executed at %s' % (n,entry.get("valid"),date))
             rep = ''
             for x in entry :
                 if x.tag == 'bgp':
                     if len(x)>0:
                         rep += etree.tostring(x).decode('utf-8')
-            compute_queue.put( (n, no, entry.find('request').text, rep, date, e.get("valid") )  ) 
+            compute_queue.put( (n, no, entry.find('request').text, rep, date, entry.get("valid") )  ) 
   
             if nbq>0 and n >= nbq : break
 
@@ -276,10 +281,10 @@ def run(inq, outq, ctx, datasource):
                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid)," Empty query !!!")
                        url = sweep+'/inform'
                        s = http.post(url,data={'data':mess,'errtype':'Empty', 'no':no})
-                       outq.put( (nbe, noq, "EmptyTPF",valid)  )
+                       outq.put( (nbe, noq, "Empty Query",valid)  )
                     else: 
                         print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),': [...]')#,rep)
-                        outq.put( (nbe, noq, "TPF",valid)  )
+                        outq.put( (nbe, noq, "Query ok",valid)  )
                     if processing > gap:
                         print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),'!!!!!!!!! hors Gap (%s) !!!!!!!!!'%gap.total_seconds())
                         outq.put( (nbe, noq, "TOGAP",valid)  )
@@ -340,7 +345,7 @@ if __name__ == '__main__':
     parser.add_argument("--sweep", default=SWEEP_SERVEUR, dest="sweep",help="SWEEP ('"+str(SWEEP_SERVEUR)+"' by default)")
     parser.add_argument("-s", "--server", default=TPF_SERVEUR,dest="tpfServer", help="TPF Server ('"+TPF_SERVEUR+"' by default)")
     parser.add_argument("-c", "--client", default=TPF_CLIENT,dest="tpfClient", help="TPF Client ('...' by default)")
-    parser.add_argument("-v", "--valid", default='', dest="valid",action="store_true", help="Do precision/recall")
+    parser.add_argument("-v", "--valid", dest="valid",action="store_true", help="Do precision/recall")
     parser.add_argument("-g", "--gap", type=float, default=60,dest="gap", help="Gap in minutes (60 by default)")
     parser.add_argument("-to", "--timeout", type=float, default=None, dest="timeout",help="TPF Client Time Out in minutes (no timeout by default).")
     parser.add_argument("--host", default="127.0.0.1",dest="host", help="host ('127.0.0.1' by default)")
@@ -353,7 +358,7 @@ if __name__ == '__main__':
     parser.add_argument('-n',"--nbQueries", type=int, default=0, dest="nbq", help="Max queries to study (0 by default, i.e. all queries)")
     parser.add_argument('-o',"--offset", type=int, default=0, dest="offset", help="first query to study (0 by default, i.e. all queries)")
 
-    parser.add_argument("--empty", default='', dest="doEmpty",action="store_true", help="Also run empty queries")
+    parser.add_argument("--empty", dest="doEmpty",action="store_true", help="Also run empty queries")
 
     parser.add_argument("-i", type=float, default=60, dest="period", help="Period in minutes (60 by default)")
 
@@ -438,7 +443,6 @@ if __name__ == '__main__':
         file_set = args.files
         
         if (len(file_set)==1) and os.path.isdir(file_set[0]) :
-            #print('Is Dir !!!!')
             directory = file_set[0]
             users_file = directory+'/users.xml'
             if existFile(users_file): 
@@ -446,15 +450,22 @@ if __name__ == '__main__':
                 user = args.user
                 file_set = []
                 print('On directory:',directory)
-                print('For user:',user)
+
+                if user =='' :
+                    print('For all users')
+                else:
+                    print('For user:',user)
+
                 for u in users.getroot():
-                    if u.get('ip') == user:
-                        print('User finded')
+                    if (user=='') or (u.get('ip') == user) :
                         for t in u :
                             if t.get('nb') != "0": 
-                                f = directory+ date2filename(t.get('t')) + '/' + user + '-be4dbp-tested-TPF.xml'
+                                if user=='':
+                                    f = directory+ date2filename(t.get('t')) + '/' + u.get('ip') + '-be4dbp-tested-TPF.xml'
+                                else : 
+                                    f = directory+ date2filename(t.get('t')) + '/' + user + '-be4dbp-tested-TPF.xml'
                                 if existFile(f): file_set.append( f )
-                        break;
+                        if u.get('ip') == user : break;
 
         print('Playing files :')
         print(file_set)
