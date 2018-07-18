@@ -191,27 +191,27 @@ function aides() {
 
 
 function saveData() {
-    monitor.stop(); alert('coucou') ;
+    monitor.stop(); 
     $('dashboard').hide();
     $('frequent').hide();
 
-    $('posts').hide();
-    $('posts').update("<p>save !</p>");
-    $('posts').appear(); 
-    // new Ajax.Request('/save', {
-    //         method: 'get',
-    //         onSuccess: function (trs) {
-    //             messages = trs.responseText
-    //             $('posts').hide();
-    //             $('posts').update("Save done !");
-    //             $('posts').appear();
-    //         },
-    //         onFailure: function () {
-    //             $('posts').hide();
-    //             $('posts').update("Unable to save !");
-    //             $('posts').appear();            
-    //         }
-    //     });
+    // $('posts').hide();
+    // $('posts').update("<p>save !</p>");
+    // $('posts').appear(); 
+    new Ajax.Request('/save', {
+            method: 'get',
+            onSuccess: function (trs) {
+                messages = trs.responseText
+                $('posts').hide();
+                $('posts').update("Save done !");
+                $('posts').appear();
+            },
+            onFailure: function () {
+                $('posts').hide();
+                $('posts').update("Unable to save !");
+                $('posts').appear();            
+            }
+        });
 }
 
 function mentions() {

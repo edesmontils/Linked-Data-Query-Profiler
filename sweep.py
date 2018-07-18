@@ -939,7 +939,7 @@ class SWEEP:  # Abstract Class
             writer.writeheader()
             for (ip,v) in self.usersMemory.items() :
                 (nb, sumPrecision, sumRecall) = v
-                s = dict({'ip':ip, 'precision':precision,'recall':recall})
+                s = dict({'ip':ip, 'precision':sumPrecision/nb,'recall':sumRecall/nb})
                 writer.writerow(s)
 
 class GracefulInterruptHandler(object):
