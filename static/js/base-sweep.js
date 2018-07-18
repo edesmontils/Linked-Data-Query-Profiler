@@ -168,7 +168,7 @@ function bestof() {
 }
 
 function aides() {
-    monitor.stop()
+    monitor.stop(); alert('coucou') ;
     $('dashboard').hide();
     $('frequent').hide();
     if (messages_aides == null) {
@@ -187,6 +187,31 @@ function aides() {
         $('posts').update(messages_aides);
         $('posts').appear();
     }
+}
+
+
+function saveData() {
+    monitor.stop(); alert('coucou') ;
+    $('dashboard').hide();
+    $('frequent').hide();
+
+    $('posts').hide();
+    $('posts').update("<p>save !</p>");
+    $('posts').appear(); 
+    // new Ajax.Request('/save', {
+    //         method: 'get',
+    //         onSuccess: function (trs) {
+    //             messages = trs.responseText
+    //             $('posts').hide();
+    //             $('posts').update("Save done !");
+    //             $('posts').appear();
+    //         },
+    //         onFailure: function () {
+    //             $('posts').hide();
+    //             $('posts').update("Unable to save !");
+    //             $('posts').appear();            
+    //         }
+    //     });
 }
 
 function mentions() {

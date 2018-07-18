@@ -111,7 +111,7 @@ def timeDispatcher(entryList, ctx,nbq,period) :
 
     # distrib = distributeUniform(ctx,firstTime,period,nbq)
     # print([d.isoformat() for d in distrib])
-    distrib = distributeUniformRandom(ctx,firstTime,period,nbq)
+    distrib = distributeUniform(ctx,firstTime,period,nbq)
 
     if (nbq>1) and (deltaTime == dt.timedelta(minutes=0)) :
         

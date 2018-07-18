@@ -464,7 +464,7 @@ def processBGPDiscover(in_queue, val_queue, ctx):
         BGP_list.clear()
         ctx.nbBGP.value = 0
         # val_queue.put((SWEEP_PURGE, 0, None))
-    val_queue.put(None)
+        val_queue.put(None)
     print('[processBGPDiscover] Stopped')
 
 #==================================================
@@ -694,11 +694,15 @@ def processMemory(ctx, duration, inQueue):
             except Empty:
                 inq = (0, True)           
 
-            (mode,mess) = inq
+            if inq is None:
+                break
+            else:
+                (mode,mess) = inq
 
             if ((mode==0) and (nbMemoryChanges > 0)) or (nbMemoryChanges > 10): # Save memory in a CSV file
                 # print('[processMemory] Save (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
                 ctx.saveMemory()
+                ctx.saveUsers()
                 nbMemoryChanges = 0
 
             if mode==4:
@@ -765,19 +769,9 @@ def processMemory(ctx, duration, inQueue):
                     else: i += 1
 
     except KeyboardInterrupt:
-        if nbMemoryChanges > 0: ctx.saveMemory()
         pass
-
-    with open('sweep_users.csv',"w", encoding='utf-8') as f:
-        fn=['ip','precision','recall']
-        writer = csv.DictWriter(f,fieldnames=fn,delimiter=',')
-        writer.writeheader()
-        for ip,v in ctx.usersMemory.items() :
-            v = (nb, sumPrecision, sumRecall) 
-            s = dict({'ip':ip, 'precision':precision,'recall':recall})
-            writer.writerow(s)
-
-    print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size : ',maxRankingBGPs ,'\n\t- max Queries ranking size : ',maxRankingQueries )
+    finally :
+        print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size : ',maxRankingBGPs ,'\n\t- max Queries ranking size : ',maxRankingQueries )
 
 #==================================================
 
@@ -873,6 +867,8 @@ class SWEEP:  # Abstract Class
         self.entryProcess.join()
         self.validationProcess.join()
         self.memoryProcess.join()
+        # self.saveMemory()
+        # self.saveUsers()
 
     def getTopKBGP(self,n):
         with self.lck:
@@ -935,6 +931,16 @@ class SWEEP:  # Abstract Class
         except KeyboardInterrupt:
             print('Interupted') 
 
+    def saveUsers(self):
+        print('Saving users (%d) '%len(self.usersMemory.keys()))
+        with open('sweep_users.csv',"w", encoding='utf-8') as f:
+            fn=['ip','precision','recall']
+            writer = csv.DictWriter(f,fieldnames=fn,delimiter=',')
+            writer.writeheader()
+            for (ip,v) in self.usersMemory.items() :
+                (nb, sumPrecision, sumRecall) = v
+                s = dict({'ip':ip, 'precision':precision,'recall':recall})
+                writer.writerow(s)
 
 class GracefulInterruptHandler(object):
 

@@ -75,7 +75,7 @@ app.secret_key = '\x0ctD\xe3g\xe1XNJ\x86\x02\x03`O\x98\x84\xfd,e/5\x8b\xd1\x11'
 @app.route('/')
 # @login_required
 def index():
-    return render_template('index-sweep.html',nom_appli="SWEEP Dashboard", version="0.2")
+    return render_template('index-sweep.html',nom_appli="SWEEP Dashboard", version="0.25")
 
 @app.route('/bestof')
 def bo():
@@ -444,16 +444,35 @@ def processData():
 @app.route('/mentions')
 def mentions():
     s = """
-        <p>This small web application has been developed for demonstration purposes. It can not therefore be used for any other purpose. It shall be made available in so far as its use is not diverted. The author can not be held responsible for malfunctions or loss of data in case of misuse and reserves the right to delete it at any time.</p>
-        <p>Application developped et tested with Python 3.5 and 3.6.</p>
-        <p>Design adapted from "<a href="http://www.freecsstemplates.org/preview/dusplic/">dusplic</a>" de <a href="http://www.freecsstemplates.org/"><strong>Free CSS Templates</strong></a>, under license <a href="./license.txt">Creative Common</a>.</p>
-        <p>Icons from <a href="http://www.iconspedia.com/">http://www.iconspedia.com/</a> in the set "<a href="http://www.iconspedia.com/pack/basic-set-2061/">Basic set</a>" of PixelMixer (<a href="http://pixel-mixer.com/">http://pixel-mixer.com/</a>) under license CC-by-sa.<br/>
-        <!--img src="http://www.iconspedia.com/common/images/logo.jpg" width="100" alt="CC-by-sa"/--></p>
-        <p>Effects and JavaScript frameworks <a href="http://www.prototypejs.org">prototypejs.org<!--img src="http://www.prototypejs.org/images/logo-home.gif" alt="prototypejs.org" /--></a> et <a href="http://www.script.aculo.us">script.aculo.us<!--img src="http://www.script.aculo.us/scriptaculous_logo.png" width="300" alt="script.aculo.us"/--></a>.</p>
-        <p>SWEEP uses <a href="http://justgage.com/">JustGage</a> (under <a href="http://opensource.org/licenses/mit-license.php">MIT License</a>), a JavaScript plugin for generating and animating gauges.</p>
-        <p>(c) E. Desmontils &amp; P. Serrano-Alvarado, University of Nantes, France, 2017</p>
+        
     """
     return s
+
+@app.route("/save")
+def save():
+    ctx.sweep.saveMemory()
+    ctx.sweep.saveUsers()
+    # s = """<p>Save done</p> <a href="/admin">Back</a> """
+    # return s
+    return jsonify(result=True)
+
+# @app.route("/admin")
+# def admin():
+#     s = """
+#     <html>
+#     <head></head>
+#     <body>
+#         <h1>Administration</h1>
+#         <p>Some tools to manage SWEEP</p>
+
+#         <form  action="/save">
+#             <input type="submit" value="Save memory and user's results"/>
+#         </form>
+#         <a href="/">Back to SWEEP</a>
+#     </body>
+#     </html>
+#     """
+#     return s
 
 #==================================================
 #==================================================
@@ -518,9 +537,10 @@ if __name__ == '__main__':
             port=int(aport),
             debug=False
         )
-        # while 1:
-        #     time.sleep(60)
     except KeyboardInterrupt:
+        pass
+    finally:
+        # print('Terminaison')
         ctx.sweep.stop()
         ctx.qm.stop()
-    print('The End !!!')
+        # print('The End !!!')
