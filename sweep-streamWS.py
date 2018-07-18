@@ -450,8 +450,9 @@ def mentions():
 
 @app.route("/save")
 def save():
-    ctx.sweep.saveMemory()
-    ctx.sweep.saveUsers()
+    with ctx.sweep.lck:
+        ctx.sweep.saveMemory()
+        ctx.sweep.saveUsers()
     # s = """<p>Save done</p> <a href="/admin">Back</a> """
     # return s
     return jsonify(result=True)
