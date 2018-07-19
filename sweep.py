@@ -701,9 +701,8 @@ def processMemory(ctx, duration, inQueue):
 
             if ((mode==0) and (nbMemoryChanges > 0)) or (nbMemoryChanges > 10): # Save memory in a CSV file
                 # print('[processMemory] Save (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
-                with ctx.lck:
-                    ctx.saveMemory()
-                    ctx.saveUsers()
+                ctx.saveMemory()
+                ctx.saveUsers()
                 nbMemoryChanges = 0
 
             if mode==4:
@@ -939,10 +938,11 @@ class SWEEP:  # Abstract Class
             fn=['ip','precision','recall','nb']
             writer = csv.DictWriter(f,fieldnames=fn,delimiter=',')
             writer.writeheader()
-            for (ip,v) in self.usersMemory.items() :
-                (nb, sumPrecision, sumRecall) = v
-                s = dict({'ip':ip, 'precision':sumPrecision/nb,'recall':sumRecall/nb, 'nb':nb})
-                writer.writerow(s)
+            with self.lck:
+                for (ip,v) in self.usersMemory.items() :
+                    (nb, sumPrecision, sumRecall) = v
+                    s = dict({'ip':ip, 'precision':sumPrecision/nb,'recall':sumRecall/nb, 'nb':nb})
+                    writer.writerow(s)
 
 class GracefulInterruptHandler(object):
 

@@ -168,7 +168,7 @@ function bestof() {
 }
 
 function aides() {
-    monitor.stop(); alert('coucou') ;
+    monitor.stop();
     $('dashboard').hide();
     $('frequent').hide();
     if (messages_aides == null) {

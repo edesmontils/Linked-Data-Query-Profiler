@@ -454,7 +454,6 @@ def mentions():
 
 @app.route("/save")
 def save():
-    # with ctx.sweep.lck:
     ctx.sweep.saveMemory()
     ctx.sweep.saveUsers()
     # s = """<p>Save done</p> <a href="/admin">Back</a> """

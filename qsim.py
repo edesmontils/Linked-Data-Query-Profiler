@@ -262,7 +262,8 @@ def run(inq, outq, ctx, datasource):
             for i in range(TPF_CLIENT_REDO): # We try the query TPF_CLIENT_REDO times beause of TPF Client problems 
                 try:
 
-                    mess = '<query time="'+date2str(dt.datetime.now())+'" no="'+no+'"><![CDATA['+query+']]></query>'
+                    # mess = '<query time="'+date2str(dt.datetime.now())+'" no="'+no+'"><![CDATA['+query+']]></query>'
+                    mess = '#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+ip+'@'+date2str(oldDate)+'\n'+query
                     if doPR:
                         url = ctx.sweep+'/query'
                         print('on:',url)
@@ -273,9 +274,7 @@ def run(inq, outq, ctx, datasource):
                         #     print('Exception',e)
 
                     before = now()
-                    sweep_query = '#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+ip+'@'+date2str(oldDate)+'\n'+query
-                    print(sweep_query)
-                    rep = sp.query(sweep_query)
+                    rep = sp.query(mess)
                     after = now()
                     processing = after - before
                     # print('(%d)'%nbe,':',rep)
