@@ -294,7 +294,7 @@ def treat(query, bgp_list, ip, datasource):
             # bgp_uri = ctx.addr_ext+'/bgp/'+str(ctx.BGPNb)
             # ctx.BGPRefList[ctx.BGPNb] = bgp_list
             res = ctx.listeSP[datasource].query(
-                '#bgp-list#'+quote_plus(bgp_list)+'\n'+query)
+                '#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+str(ip)+'\n'+query)
             after = now()
             ctx.lastProcessing = after - before
             # print('(%d)'%nbe,':',rep)

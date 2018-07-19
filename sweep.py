@@ -478,7 +478,7 @@ def testPrecisionRecallBGP(queryList, bgp, gap):
     best_precision = 0
     best_recall = 0
     for i in queryList:
-        ((time, ip, query, qbgp, queryID), old_bgp, precision, recall) = queryList[i]
+        ((time, ip, query, qbgp, queryID,queryCode), old_bgp, precision, recall) = queryList[i]
 
         if SWEEP_DEBUB_PR:
             rep = ''
@@ -496,8 +496,8 @@ def testPrecisionRecallBGP(queryList, bgp, gap):
                     best_precision = precision2
                     best_recall = recall2
     if best > 0:
-        ((time, ip, query, qbgp, queryID), old_bgp, precision, recall) = queryList[best]
-        queryList[best] = ((time, ip, query, qbgp, queryID), bgp, best_precision, best_recall)
+        ((time, ip, query, qbgp, queryID,queryCode), old_bgp, precision, recall) = queryList[best]
+        queryList[best] = ((time, ip, query, qbgp, queryID,queryCode), bgp, best_precision, best_recall)
         if SWEEP_DEBUB_PR:
             print('association:', queryID, best_precision, best_recall)
             bgp.print()
@@ -525,13 +525,13 @@ def processValidation(in_queue, memoryQueue, ctx):
             if mode == SWEEP_IN_QUERY:
                 # print('[processValidation] Query analysis')
                 ctx.stat['nbQueries'] += 1
-                (time, ip, query, qbgp, queryID) = val
+                (time, ip, query, qbgp, queryID,queryCode) = val
                 currentTime = now()
                 if SWEEP_DEBUB_PR:
                     print('+++')
                     print(currentTime, ' New query', val)
                 (precision, recall, bgp) = (0, 0, None)
-                queryList[id] = ((time, ip, query, qbgp, queryID), bgp, precision, recall)
+                queryList[id] = ((time, ip, query, qbgp, queryID,queryCode), bgp, precision, recall)
                 # print('[processValidation] Query added')
 
             elif mode == SWEEP_IN_BGP:
@@ -555,7 +555,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                                 print('BGP not associated and archieved :')
                                 old_bgp.print()
                         if old_bgp is not None:
-                            memoryQueue.put( (4,  (0, 'none', old_bgp.birthTime, old_bgp.client, None, None, old_bgp, 0, 0) ) )                      
+                            memoryQueue.put( (4,  (0, 'none', 'none', old_bgp.birthTime, old_bgp.client, None, None, old_bgp, 0, 0) ) )                      
                 # print('[processValidation] BGP added')
 
             # dans le cas où le client TPF n'a pas pu exécuter la requête...
@@ -563,7 +563,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                 # print('[processValidation] Query deletion')
                 # suppress query 'queryID'
                 for i in queryList:
-                    ((time, ip, query, qbgp, queryID), bgp, precision, recall) = queryList[i]
+                    ((time, ip, query, qbgp, queryID,queryCode), bgp, precision, recall) = queryList[i]
                     if queryID == val:
                         if SWEEP_DEBUB_PR:
                             print('---')
@@ -577,7 +577,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                                 bgp.print()
                             old_bgp = testPrecisionRecallBGP(queryList, bgp, gap)
                             if old_bgp is not None:
-                                memoryQueue.put( (4, (0, 'none', old_bgp.birthTime, old_bgp.client, None, None, old_bgp, 0, 0)) )
+                                memoryQueue.put( (4, (0, 'none', 'none', old_bgp.birthTime, old_bgp.client, None, None, old_bgp, 0, 0)) )
                         else:
                             if SWEEP_DEBUB_PR:
                                 print('-')
@@ -593,12 +593,12 @@ def processValidation(in_queue, memoryQueue, ctx):
             # print('[processValidation] Trying to suppress oldest queries (%d waiting queries)'%len(queryList))
             old = []
             for id in queryList:
-                ((time, ip, query, qbgp, queryID), bgp, precision, recall) = queryList[id]
+                ((time, ip, query, qbgp, queryID,queryCode), bgp, precision, recall) = queryList[id]
                 if currentTime - time > valGap:
                     old.append(id)
 
             for id in old:
-                ((time, ip, query, qbgp, queryID), bgp, precision, recall) = queryList.pop(id)
+                ((time, ip, query, qbgp, queryID,queryCode), bgp, precision, recall) = queryList.pop(id)
                 if SWEEP_DEBUB_PR:
                     print('--- purge ', queryID, '(', time, ') ---', precision, '/', recall, '---', ' @ ', currentTime, '---')
                     print(query)
@@ -606,7 +606,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                 #---
                 assert (bgp is None) or (ip == bgp.client), 'Client Query différent de client BGP'
                 #---
-                memoryQueue.put( (4, (id, queryID, time, ip, query, qbgp, bgp, precision, recall)) )
+                memoryQueue.put( (4, (id, queryID,queryCode, time, ip, query, qbgp, bgp, precision, recall)) )
                 ctx.stat['sumRecall'] += recall
                 ctx.stat['sumPrecision'] += precision
                 ctx.stat['sumQuality'] += (recall+precision)/2
@@ -631,7 +631,7 @@ def processValidation(in_queue, memoryQueue, ctx):
         pass
     finally:
         for id in queryList:
-            ((time, ip, query, qbgp, queryID), bgp, precision, recall) = queryList.pop(id)
+            ((time, ip, query, qbgp, queryID,queryCode), bgp, precision, recall) = queryList.pop(id)
             if SWEEP_DEBUB_PR:
                 print('--- purge ', queryID, '(', time, ') ---',
                       precision, '/', recall, '---', ' @ ', currentTime, '---')
@@ -640,7 +640,7 @@ def processValidation(in_queue, memoryQueue, ctx):
             #---
             assert (bgp is None) or (ip == bgp.client), 'Client Query différent de client BGP'
             #---
-            memoryQueue.put( (4, (id, queryID, time, ip, query, qbgp, bgp, precision, recall)) )
+            memoryQueue.put( (4, (id, queryID,queryCode, time, ip, query, qbgp, bgp, precision, recall)) )
             ctx.stat['sumRecall'] += recall
             ctx.stat['sumPrecision'] += precision
             ctx.stat['sumQuality'] += (recall+precision)/2
@@ -701,15 +701,17 @@ def processMemory(ctx, duration, inQueue):
 
             if ((mode==0) and (nbMemoryChanges > 0)) or (nbMemoryChanges > 10): # Save memory in a CSV file
                 # print('[processMemory] Save (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
-                ctx.saveMemory()
-                ctx.saveUsers()
+                with ctx.lck:
+                    ctx.saveMemory()
+                    ctx.saveUsers()
                 nbMemoryChanges = 0
 
             if mode==4:
                 # print('[processMemory] new Entry in memory (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
-                (id, queryID, time, ip, query, qbgp, bgp, precision, recall) = mess
+                (id, queryID,queryCode, time, ip, query, qbgp, bgp, precision, recall) = mess
 
-                ctx.memory.append( ( now() , id, queryID, time, ip, query, bgp, precision, recall) )
+                with ctx.lck:
+                    ctx.memory.append( ( now() , id, queryID,queryCode, time, ip, query, bgp, precision, recall) )
                 nbMemoryChanges += 1
 
                 if query is not None :
@@ -737,10 +739,10 @@ def processMemory(ctx, duration, inQueue):
 
                 if (query is not None) and (ip is not None) :
                     if ip in ctx.usersMemory.keys():
-                        (nb, sumPrecision, sumRecall) = ctx.usersMemory[ip]
+                        (nb, sumPrecision, sumRecall) = ctx.usersMemory[queryCode]
                     else:
                         (nb, sumPrecision, sumRecall) = (0,0,0)
-                    ctx.usersMemory[ip] = (nb+1,sumPrecision+precision, sumRecall+recall)
+                    ctx.usersMemory[queryCode] = (nb+1,sumPrecision+precision, sumRecall+recall)
 
             else:
                 pass
@@ -754,7 +756,7 @@ def processMemory(ctx, duration, inQueue):
             threshold = now() - ctx.memDuration
             with ctx.lck:
                 while len(ctx.memory)>0 :
-                    (t, id, queryID, time, ip, query, bgp, precision, recall) = ctx.memory[0]
+                    (t, id, queryID, queryCode, time, ip, query, bgp, precision, recall) = ctx.memory[0]
                     if t < threshold : ctx.memory.pop(0)
                     else: break
                 i = 0
@@ -836,14 +838,14 @@ class SWEEP:  # Abstract Class
         self.dataQueue.put(v)
         # To implement
 
-    def putQuery(self, time, ip, query, bgp, queryID):
+    def putQuery(self, time, ip, query, bgp, queryID,queryCode):
         with self.qId.get_lock():
             self.qId.value += 1
             qId = self.qId.value
             if queryID is None:
                 queryID = 'id'+str(qId)
         self.validationQueue.put(
-            (SWEEP_IN_QUERY, qId, (time, ip, query, bgp, queryID)))
+            (SWEEP_IN_QUERY, qId, (time, ip, query, bgp, queryID,queryCode)))
 
     def putEnd(self, i):
         self.dataQueue.put((i, SWEEP_IN_END, ()))
@@ -898,7 +900,7 @@ class SWEEP:  # Abstract Class
     def getMemory(self):
         # print('Début get memory')
         with self.lck:
-            r = [(id, queryID, time, ip, query, bgp, precision, recall) for (t, id, queryID, time, ip, query, bgp, precision, recall) in self.memory]
+            r = [(id, queryID,queryCode, time, ip, query, bgp, precision, recall) for (t, id, queryID,queryCode, time, ip, query, bgp, precision, recall) in self.memory]
         # print('Fin get memory')
         return (len(r), r )
 
@@ -912,11 +914,11 @@ class SWEEP:  # Abstract Class
         print('Saving memory ',mode)
         try:
             with open(file, mode, encoding='utf-8') as f:
-                fn = ['id', 'qID', 'time', 'ip', 'query', 'bgp', 'precision', 'recall']
+                fn = ['id', 'qID', 'queryCode', 'time', 'ip', 'query', 'bgp', 'precision', 'recall']
                 writer = csv.DictWriter(f, fieldnames=fn, delimiter=sep)
                 if not(exists): writer.writeheader()
                 with self.lck:
-                    for (t, id, queryID, t, ip, query, bgp, precision, recall) in self.memory:
+                    for (t, id, queryID,queryCode, t, ip, query, bgp, precision, recall) in self.memory:
                         if t > self.lastTimeMemorySaved:
                             maxt = max(t,self.lastTimeMemorySaved)
                             if bgp is not None:
@@ -924,7 +926,7 @@ class SWEEP:  # Abstract Class
                             else:
                                 bgp_txt = "..."
                             if query is None: query='...'
-                            s = {'id': id, 'qID': queryID, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
+                            s = {'id': id, 'qID': queryID, 'queryCode':queryCode, 'time': t, 'ip': ip, 'query': query, 'bgp': bgp_txt, 'precision': precision, 'recall': recall}
                             writer.writerow(s)
             self.lastTimeMemorySaved = maxt
             print('Memory saved')
@@ -934,12 +936,12 @@ class SWEEP:  # Abstract Class
     def saveUsers(self):
         print('Saving users (%d) '%len(self.usersMemory.keys()))
         with open('sweep_users.csv',"w", encoding='utf-8') as f:
-            fn=['ip','precision','recall']
+            fn=['ip','precision','recall','nb']
             writer = csv.DictWriter(f,fieldnames=fn,delimiter=',')
             writer.writeheader()
             for (ip,v) in self.usersMemory.items() :
                 (nb, sumPrecision, sumRecall) = v
-                s = dict({'ip':ip, 'precision':sumPrecision/nb,'recall':sumRecall/nb})
+                s = dict({'ip':ip, 'precision':sumPrecision/nb,'recall':sumRecall/nb, 'nb':nb})
                 writer.writerow(s)
 
 class GracefulInterruptHandler(object):

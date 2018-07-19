@@ -186,7 +186,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
         result = []
 
         n = 0
-        for (no,entry,_) in  entryList:
+        for (no,entry,oldDate) in  entryList:
             n += 1
             date = current_date+(fromISO(entry.get('datetime'))-firstTime)
 
@@ -196,7 +196,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
                 if x.tag == 'bgp':
                     if len(x)>0:
                         rep += etree.tostring(x).decode('utf-8')
-            compute_queue.put( (n, no, entry.find('request').text, rep, date, entry.get("valid") )  ) 
+            compute_queue.put( (n, no, entry.find('request').text, rep, date, oldDate, ip, entry.get("valid") )  ) 
   
             if nbq>0 and n >= nbq : break
 
@@ -237,7 +237,7 @@ def run(inq, outq, ctx, datasource):
     mss = inq.get()
 
     while mss is not None:
-        (nbe,noq,query, bgp_list,d, valid) = mss
+        (nbe,noq,query, bgp_list,d, oldDate,ip,valid) = mss
         duration = max(dt.timedelta.resolution, d-dt.datetime.now())
         print('(%d)'%nbe,'Sleep:',duration.total_seconds(),' second(s)')
         time.sleep(duration.total_seconds())
@@ -273,7 +273,9 @@ def run(inq, outq, ctx, datasource):
                         #     print('Exception',e)
 
                     before = now()
-                    rep = sp.query('#bgp-list#'+quote_plus(bgp_list)+'\n'+query)
+                    sweep_query = '#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+ip+'@'+date2str(oldDate)+'\n'+query
+                    print(sweep_query)
+                    rep = sp.query(sweep_query)
                     after = now()
                     processing = after - before
                     # print('(%d)'%nbe,':',rep)

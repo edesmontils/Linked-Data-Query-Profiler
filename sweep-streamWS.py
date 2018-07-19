@@ -212,7 +212,7 @@ def sweep():
     rep += '</thead>\n'
     (nb, memory) = ctx.sweep.getMemory()
     for j in range(min(nb,ctx.nlast)):
-        (i,idQ, t,ip,query,bgp,precision,recall) = memory[nb-j-1]
+        (i,idQ,queryCode, t,ip,query,bgp,precision,recall) = memory[nb-j-1]
         if i==0:
             rep +='<tr><td>'+str(nb-j)+'</td><td>'+bgp.client+'</td><td>'+str(bgp.time)+'</td><td>'
             for (s,p,o) in [(tp.s,tp.p,tp.o) for tp in bgp.tp_set]:
@@ -320,11 +320,15 @@ def processQuery():
                 t = query.split('\n')
                 bgp_list = unquote_plus(t[0][10:])
                 del t[0]
+                queryCode = t[0][8:]
+                del t[0]
                 query = '\n'.join(t)
             else:
                 bgp_list = '<l/>'
+                queryCode = ip
 
             l = []
+            print('---',queryCode,'---')
             print(query)
             print(bgp_list)
             lbgp = etree.parse(StringIO(bgp_list), ctx.parser)
@@ -347,7 +351,7 @@ def processQuery():
             rang = 0
             for bgp in l :
                 rang += 1
-                ctx.sweep.putQuery(time,ip,query,bgp,str(queryID)+'_'+str(rang))
+                ctx.sweep.putQuery(time,ip,query,bgp,str(queryID)+'_'+str(rang),queryCode)
 
             return jsonify(result=True)
         except Exception as e:
@@ -450,9 +454,9 @@ def mentions():
 
 @app.route("/save")
 def save():
-    with ctx.sweep.lck:
-        ctx.sweep.saveMemory()
-        ctx.sweep.saveUsers()
+    # with ctx.sweep.lck:
+    ctx.sweep.saveMemory()
+    ctx.sweep.saveUsers()
     # s = """<p>Save done</p> <a href="/admin">Back</a> """
     # return s
     return jsonify(result=True)
