@@ -737,7 +737,7 @@ def processMemory(ctx, duration, inQueue):
                                 ctx.topKBGPs.append(sscBGP.monitored[e])
 
                 if (query is not None) and (ip is not None) :
-                    if ip in ctx.usersMemory.keys():
+                    if queryCode in ctx.usersMemory.keys():
                         (nb, sumPrecision, sumRecall) = ctx.usersMemory[queryCode]
                     else:
                         (nb, sumPrecision, sumRecall) = (0,0,0)
