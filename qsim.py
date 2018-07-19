@@ -104,8 +104,18 @@ def distributeUniformRandom(ctx, base, period, nbq) :
     return [base+(period*x) for x in l]
 
 def compactTime(base,distrib) : # TODO : limiter la taille des intervals vides à 1.5*gap
+    print(distrib)
     delta = distrib[0]-base
-    return [x-delta for x in distrib]
+    loc = [x-delta for x in distrib]
+    for i in range(len(loc)-1):
+        if loc[i+1]>loc[i]+ctx.gap*2 : 
+            print('trop long!')
+            j = i+1
+            d = loc[i+1]-loc[i]-(ctx.gap*2)
+            while j<len(loc):
+                loc[j] = loc[j]-d
+                j +=1
+    return loc
 
 def timeDispatcher(entryList, ctx,nbq,period) :
     (_,_, firstTime) = entryList[0]
@@ -116,6 +126,7 @@ def timeDispatcher(entryList, ctx,nbq,period) :
     # distrib = distributeUniform(ctx,firstTime,period,nbq)
     # print([d.isoformat() for d in distrib])
     distrib = compactTime(firstTime,distributeUniformRandom(ctx,firstTime,period,nbq))
+    print(distrib)
 
     if (nbq>1) and (deltaTime == dt.timedelta(minutes=0)) :
         
