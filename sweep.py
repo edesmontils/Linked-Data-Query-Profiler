@@ -139,6 +139,29 @@ class TriplePatternQuery(TripplePattern):
             o = self.o
         return hash(toStr(s, p, o))
 
+    def shape(self) :
+        sh = ''
+        if isinstance(self.s, Variable):
+            sh += 'V'
+        elif isinstance(self.s, URIRef):
+            sh += 'I'
+        else: sh += 'C'
+        if isinstance(self.p, Variable):
+            sh += 'V'
+        elif isinstance(self.p, URIRef):
+            sh += 'I'
+        else: sh += 'C'
+        if isinstance(self.o, Variable):
+            sh += 'V'
+        elif isinstance(self.o, URIRef):
+            sh += 'I'
+        else: sh += 'C'     
+        return sh
+
+    # hypothèse : pas de jointure prédicat
+    def iriJoinable(self) :
+        return self.shape() in ["IVC", "IVI", "IIV", "IVV", "VII", "VVI"]
+
     def nestedLoopOf2(self,baseTPQ):
         # 1:sp->sp 2:so->so 3:s->s 4:so->os 5:s->o 6:o->s 8:po->po 9:p->p 10:sp->po
         # 0/1/2/3 ->(0/1/2/3,0/1/2/3,0/1/2/3)
@@ -169,6 +192,8 @@ def doInjection(base, injection, val) :
     else: return val
 
 #==================================================
+
+
 
 class BasicGraphPattern:
     def __init__(self, gap=None, tpq=None):
@@ -234,6 +259,32 @@ class BasicGraphPattern:
         assert isinstance(
             tpq, TriplePatternQuery), "BasicGraphPattern.canBeCandidate : Pb type TPQ"
         return (tpq.client == self.client) and (tpq.time - self.time <= self.gap) and (tpq.sign() not in self.input_set)
+
+    def findIRIJoin(self,ntpq) :
+        # "IVC", "IVI", "IIV", "IVV", "VII", "VVI"
+        if ntpq.iriJoinable() :
+            trouve = False
+            ntpqIriSet = set()
+            sh = ntpq.shape()
+            if sh[0]=='I':
+                ntpqIriSet.add(ntpq.s)
+            if sh[2]=='I':
+                ntpqIriSet.add(ntpq.o)
+            for (_, tpq) in enumerate(self.tp_set):
+                if tpq.iriJoinable():
+                    tpqIriSet = set()
+                    sh = tpq.shape()
+                    if sh[0]=='I':
+                        tpqIriSet.add(tpq.s)
+                    if sh[2]=='I':
+                        tpqIriSet.add(tpq.o)
+                    if ntpqIriSet & tpqIriSet :
+                        trouve = True
+                        break;
+
+            if trouve : return (True,ntpq,tpq, (None,None,None))
+            else : return (False,None,None,None)
+        else: return (False,None,None,None)
 
     def findNestedLoop(self, ntpq):
         assert isinstance(
@@ -398,6 +449,7 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                         if bgp.canBeCandidate(new_tpq):
                             # Si c'est le même client, dans le gap et un TP identique,
                             #  n'a pas déjà été utilisé pour ce BGP
+
                             (trouve, candTP,fromTP,mapVal) = bgp.findNestedLoop(new_tpq)
                             if trouve:
                                 # le nouveau TPQ pourrait être produit par un nested loop... on teste alors
@@ -422,6 +474,27 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                                 if ctx.optimistic:
                                     bgp.time = time
                                 break #on en a trouvé un bon... on arrête de chercher !
+
+                            else : # on essaye la jointure sur les IRI
+                                (trouve, candTP,fromTP,mapVal) = bgp.findIRIJoin(new_tpq)
+                                if trouve :
+                                    # le nouveau TPQ pourrait être produit par une jointure sur IRI... on teste alors
+                                    # sa "forme d'origine" 'candTP'
+                                    if SWEEP_DEBUG_BGP_BUILD:
+                                        print('\t\t ok avec :', new_tpq.toStr(),' sur IRI',
+                                              '\n\t\t |-> ', candTP.toStr())
+                                    (ok, tp) = bgp.existTP(candTP,fromTP)
+                                    if ok:
+                                        trouve = False
+                                    else:  # C'est un nouveau TPQ du BGP !
+                                        if SWEEP_DEBUG_BGP_BUILD:
+                                            print('\t\t Ajout de ', new_tpq.toStr(
+                                            ), '\n\t\t avec ', candTP.toStr())
+                                        bgp.add(candTP, new_tpq.sign())
+                                        if ctx.optimistic:
+                                            bgp.time = time
+                                        break #on en a trouvé un bon... on arrête de chercher !                                    
+
                         else:
                             if (new_tpq.client == bgp.client) and (new_tpq.time - bgp.time <= gap):
                                 if SWEEP_DEBUG_BGP_BUILD:
@@ -1037,26 +1110,63 @@ def save(node_log, lift2):
 if __name__ == "__main__":
     print("main sweep")
     gap = dt.timedelta(minutes=1)
+
     tpq1 = TriplePatternQuery(Variable('s'), URIRef('http://exemple.org/p1'), Literal('2'), now(
     ), 'Client2', [URIRef('http://exemple.org/test1'), URIRef('http://exemple.org/test2')], [], [])
     tpq1.renameVars(1)
     print(tpq1.toString())
+    print(tpq1.shape())
+    print(tpq1.iriJoinable())
+
     tpq2 = TriplePatternQuery(URIRef('http://exemple.org/test1'), URIRef(
-        'http://exemple.org/p2'), Literal('3'), now(), '2', ['a', 'b'], [], [])
+        'http://exemple.org/p2'), Literal('3'), now(), 'Client2', [], [], [])
     tpq2.renameVars(2)
     print(tpq2.toString())
+    print(tpq2.shape())
+    print(tpq2.iriJoinable())
+
     tpq3 = TriplePatternQuery(URIRef('http://exemple.org/test2'), URIRef(
-        'http://exemple.org/p2'), Literal('4'), now(), '2', ['a', 'b'], [], [])
+        'http://exemple.org/p2'), Literal('4'), now(), 'Client2', [], [], [])
     tpq3.renameVars(3)
     print(tpq3.toString())
+    print(tpq3.shape())
+    print(tpq3.iriJoinable())
+
+    print('---')
 
     print('\n Début')
     bgp = BasicGraphPattern(gap, tpq1)
     bgp.print()
 
+    print('--- nestedLoopOf2')
     print(tpq2.nestedLoopOf2(tpq1))
 
+    print('--- findNestedLoop')
     (t, tp,fTp,mapVal) = bgp.findNestedLoop(tpq2)
     if t:
+        print(mapVal)
+        print(fTp.toString())
         print(tp.toString())
+
+    print('---')
+
+
+    tpq4 = TriplePatternQuery(URIRef('http://exemple.org/test2'), URIRef(
+        'http://exemple.org/p2'), Variable('o'), now(), 'Client2', [], [], ['a','b'])
+    tpq4.renameVars(4)
+    print(tpq4.toString())
+    print(tpq4.shape())
+    print(tpq4.iriJoinable())
+
+    bgp = BasicGraphPattern(gap, tpq4)
+    bgp.print()
+
+    tpq5 = TriplePatternQuery(URIRef('http://exemple.org/test1'), Variable('p'), Variable('o'), now(), 'Client2', [], ['p'], ['c','d'])
+    tpq5.renameVars(5)
+    print(tpq5.toString())
+    print(tpq5.shape())
+    print(tpq5.iriJoinable())
+
+    print(bgp.findIRIJoin(tpq5))
+
     print('Fin')

@@ -226,7 +226,7 @@ def sweep():
                     rep += html.escape(toStr(s,p,o))+' . <br/>'
             else:
                 rep += 'No BGP assigned !'
-            rep += '</td><td>'+idQ+'<br/>'+html.escape(query)+'</td><td>%2.3f</td><td>%2.3f</td>'%(precision,recall)    # .replace('\n','<br/>')
+            rep += '</td><td>'+idQ+' | '+queryCode+'<br/>'+html.escape(query)+'</td><td>%2.3f</td><td>%2.3f</td>'%(precision,recall)    # .replace('\n','<br/>')
             rep += '</tr>'
     rep += '</table>'
     return rep
