@@ -103,10 +103,12 @@ def distributeUniformRandom(ctx, base, period, nbq) :
     l.sort()
     return [base+(period*x) for x in l]
 
-def compactTime(base,distrib) : # TODO : limiter la taille des intervals vides à 1.5*gap
+def compactTime(base,distrib) : 
     print(distrib)
     delta = distrib[0]-base
+    # on place le 1er à 0
     loc = [x-delta for x in distrib]
+    # on recherche les écarts trop importants (2*gap) et on réduit
     for i in range(len(loc)-1):
         if loc[i+1]>loc[i]+ctx.gap*2 : 
             print('trop long!')
