@@ -146,7 +146,7 @@ def bo():
     rep += '<table cellspacing="1" border="1" cellpadding="2">'
     rep += '<thead><td>Code</td><td>Nb queries</td><td>Precision</td><td>Recall</td>'
     with ctx.sweep.lck:
-        for (ip,v) in ctx.sweep.usersMemory.items() :
+        for (ip,v) in sorted(ctx.sweep.usersMemory.items()) :
             (nb, sumPrecision, sumRecall) = v
             rep += '<tr>'
             rep += '<td>%s</td><td>%d</td><td>%2.3f</td><td>%2.3f</td>'%(ip,nb,sumPrecision/nb,sumRecall/nb)
