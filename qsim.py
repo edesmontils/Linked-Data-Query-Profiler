@@ -149,7 +149,7 @@ def timeDispatcher(entryList, ctx,nbq,period) :
 def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
     compute_queue = mp.Queue(nb_processes)
     result_queue = mp.Queue()
-    print('\n\n Playing: %s' % file)
+    print('\n\n @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ \n Playing: %s' % file)
     parser = etree.XMLParser(recover=True, strip_cdata=True)
     tree = etree.parse(file, parser)
     #---
@@ -246,7 +246,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
                 nbOk += 1
             elif m in ("TOGAP") :
                 nbGap +=1
-        print('Fin de traitement de %s' % file)
+        print('The end for %s' % file)
         if len(result)>0: 
             avgT = sumT/len(result)
             print('Average processing',avgT )
@@ -519,11 +519,10 @@ if __name__ == '__main__':
                 nb += 1
                 time.sleep(ctx.gap.total_seconds())
 
-
     except KeyboardInterrupt:
         pass
     finally:
-        print('End')
+        print('\n\n The end!')
         if nb>0 :
             print('Avg processing: ',sumT/nb)
         print('Queries out of gap: ',pbGap)
