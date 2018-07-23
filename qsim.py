@@ -149,7 +149,7 @@ def timeDispatcher(entryList, ctx,nbq,period) :
 def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
     compute_queue = mp.Queue(nb_processes)
     result_queue = mp.Queue()
-    print('Traitement de %s' % file)
+    print('\n\n Playing: %s' % file)
     parser = etree.XMLParser(recover=True, strip_cdata=True)
     tree = etree.parse(file, parser)
     #---
