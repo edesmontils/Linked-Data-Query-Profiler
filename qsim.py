@@ -111,7 +111,7 @@ def compactTime(base,distrib) :
     # on recherche les écarts trop importants (2*gap) et on réduit
     for i in range(len(loc)-1):
         if loc[i+1]>loc[i]+ctx.gap*2 : 
-            print('trop long!')
+            # print('trop long!')
             j = i+1
             d = loc[i+1]-loc[i]-(ctx.gap*2)
             while j<len(loc):
@@ -235,10 +235,13 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
         time.sleep(ctx.gap.total_seconds())
         print('---')
         print('%d queries treated on %d queries'%(nbq,nbEntries) )
+        sumT = dt.timedelta(minutes=0)
         for r in result :
-            (n,no,m,v) = r
-            print('=========> Query %s : %s / %s'%(no,m,v))
+            (n,no,t,m,v) = r
+            sumT = sumT + t
+            print('=========> Query %s : %s / %s'%(no,m,v), ' in ',t, 'second(s)')
         print('Fin de traitement de %s' % file)
+        if len(result)>0: print('Average processing',sumT/len(result) )
         time.sleep(ctx.gap.total_seconds())
 
 def toStr(s,p,o):
@@ -273,6 +276,7 @@ def run(inq, outq, ctx, datasource):
         no = 'qsim-'+str(nbe)
         bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
+        processing = 0
 
         try: # (TPF|SPARQL|EmptyTPF|EmptySPARQL|QBFTPF|QBFSPARQL|TOTPF|TOSPARQL|NotTested)
 
@@ -299,13 +303,13 @@ def run(inq, outq, ctx, datasource):
                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid)," Empty query !!!")
                        url = sweep+'/inform'
                        s = http.post(url,data={'data':mess,'errtype':'Empty', 'no':no})
-                       outq.put( (nbe, noq, "Empty Query",valid)  )
+                       outq.put( (nbe, noq, processing, "Empty Query",valid)  )
                     else: 
                         print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),': [...]')#,rep)
-                        outq.put( (nbe, noq, "Query ok",valid)  )
+                        outq.put( (nbe, noq, processing, "Query ok",valid)  )
                     if processing > gap:
                         print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),'!!!!!!!!! hors Gap (%s) !!!!!!!!!'%gap.total_seconds())
-                        outq.put( (nbe, noq, "TOGAP",valid)  )
+                        outq.put( (nbe, noq, processing, "TOGAP",valid)  )
                     break
 
                 except TPFClientError as e :
@@ -329,7 +333,7 @@ def run(inq, outq, ctx, datasource):
 
         except QueryBadFormed as e:
             print('(%d)'%nbe,'Query Bad Formed :',e)
-            outq.put( (nbe, noq, "QBFTPF",valid)  )
+            outq.put( (nbe, noq, processing, "QBFTPF",valid)  )
             if doPR:
                 url = sweep+'/inform'
                 s = http.post(url,data={'data':mess,'errtype':'QBF', 'no':no})
@@ -459,7 +463,7 @@ if __name__ == '__main__':
 
 
         file_set = args.files
-        
+        nb_users = 0
         if (len(file_set)==1) and os.path.isdir(file_set[0]) :
             directory = file_set[0]
             users_file = directory+'/users.xml'
@@ -470,22 +474,26 @@ if __name__ == '__main__':
                 print('On directory:',directory)
 
                 if user =='' :
-                    print('For all users')
+                    print('For all users with avgBGPSize > 1')
                 else:
                     print('For user:',user)
 
                 for u in users.getroot():
-                    if (user=='') or (u.get('ip') == user) :
+                    if ( (user=='') and ( float(u.get('avgBGPSize')) > 1.0 ) and ( int(u.get('nbok')) > 0 )) \
+                       or (u.get('ip') == user) :
+                        print('+ Adding ',u.get('ip'))
+                        nb_users +=1
                         for t in u :
-                            if t.get('nb') != "0": 
+                            if t.get('nb') != "0" : 
                                 if user=='':
                                     f = directory+ date2filename(t.get('t')) + '/' + u.get('ip') + '-be4dbp-tested-TPF.xml'
                                 else : 
                                     f = directory+ date2filename(t.get('t')) + '/' + user + '-be4dbp-tested-TPF.xml'
                                 if existFile(f): file_set.append( f )
                         if u.get('ip') == user : break;
+        
 
-        print('Playing files :')
+        print('For %d user(s), playing files :'%nb_users)
         print(file_set)
         
         for file in file_set:

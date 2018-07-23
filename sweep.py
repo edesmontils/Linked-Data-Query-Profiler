@@ -769,7 +769,7 @@ def processMemory(ctx, duration, inQueue):
             else:
                 (mode,mess) = inq
 
-            if ((mode==0) and (nbMemoryChanges > 0)) or (nbMemoryChanges > 10): # Save memory in a CSV file
+            if ((mode==0) and (nbMemoryChanges > 0)) or (nbMemoryChanges > 1000): # Save memory in a CSV file
                 # print('[processMemory] Save (%d entries to save ; %d rankedBGPs ; %d rankedQueries ; %d in memory)'%(nbMemoryChanges,len(ctx.rankingBGPs),len(ctx.rankingQueries),len(ctx.memory) ) )
                 ctx.saveMemory()
                 ctx.saveUsers()
