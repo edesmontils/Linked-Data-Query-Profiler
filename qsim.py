@@ -254,7 +254,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
             avgT = None
         print('%d queries in gap'%nbOk)
         print('%d queries out of gap'%nbGap)
-        return (len(result),avgT, noOk, nbGap)
+        return (len(result),avgT, nbOk, nbGap)
 
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
@@ -508,18 +508,25 @@ if __name__ == '__main__':
         print('For %d user(s), playing files :'%nb_users)
         print(file_set)
         
+        sumT = 0
+        nb = 0
+        pbGap = 0
         for file in file_set:
             if existFile(file):
-                play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset, args.doEmpty, dt.timedelta(minutes=args.period)  )
+                (nbq, avgT, noOk, nbGap) = play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset, args.doEmpty, dt.timedelta(minutes=args.period)  )
+                sumT = sumT + avgT
+                pbGap += nbGap
+                nb += 1
                 time.sleep(ctx.gap.total_seconds())
 
 
     except KeyboardInterrupt:
         pass
     finally:
-        # ctx.qm.stop()
-        pass
-    print('Fin')
+        print('End')
+        if nb>0 :
+            print('Avg processing: ',sumT/nb)
+        print('Queries out of gap: ',pbGap)
 
 
 
