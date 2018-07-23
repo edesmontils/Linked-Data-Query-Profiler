@@ -288,7 +288,7 @@ def run(inq, outq, ctx, datasource):
         no = 'qsim-'+str(nbe)
         bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
-        processing = 0
+        processing =  dt.timedelta(minutes=0)
 
         try: # (TPF|SPARQL|EmptyTPF|EmptySPARQL|QBFTPF|QBFSPARQL|TOTPF|TOSPARQL|NotTested)
 
@@ -508,7 +508,7 @@ if __name__ == '__main__':
         print('For %d user(s), playing files :'%nb_users)
         print(file_set)
         
-        sumT = 0
+        sumT =  dt.timedelta(minutes=0)
         nb = 0
         pbGap = 0
         for file in file_set:
