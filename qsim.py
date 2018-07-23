@@ -236,13 +236,25 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
         print('---')
         print('%d queries treated on %d queries'%(nbq,nbEntries) )
         sumT = dt.timedelta(minutes=0)
+        nbOk = 0
+        nbGap = 0
         for r in result :
             (n,no,t,m,v) = r
             sumT = sumT + t
             print('=========> Query %s : %s / %s'%(no,m,v), ' in ',t, 'second(s)')
+            if m in ("Query ok", "Empty Query"): 
+                nbOk += 1
+            elif m in ("TOGAP") :
+                nbGap +=1
         print('Fin de traitement de %s' % file)
-        if len(result)>0: print('Average processing',sumT/len(result) )
-        time.sleep(ctx.gap.total_seconds())
+        if len(result)>0: 
+            avgT = sumT/len(result)
+            print('Average processing',avgT )
+        else:
+            avgT = None
+        print('%d queries in gap'%nbOk)
+        print('%d queries out of gap'%nbGap)
+        return (len(result),avgT, noOk, nbGap)
 
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
@@ -499,6 +511,8 @@ if __name__ == '__main__':
         for file in file_set:
             if existFile(file):
                 play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset, args.doEmpty, dt.timedelta(minutes=args.period)  )
+                time.sleep(ctx.gap.total_seconds())
+
 
     except KeyboardInterrupt:
         pass
