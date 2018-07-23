@@ -251,10 +251,9 @@ def doTab(s):
     else:
         tab = '<p> Empty </p>\n'
     if ctx.lastProcessing > ctx.gap:
-        tab += '(%s sec.)' % (ctx.lastProcessing.total_seconds()
-                              ), ' The gap (%s) is exceeded.' % ctx.gap.total_seconds()
+        tab += '(%s sec.)'%ctx.lastProcessing.total_seconds(), ' The gap (%s) is exceeded.' % ctx.gap.total_seconds()
     else:
-        tab += '(%s sec.)' % (ctx.lastProcessing.total_seconds())
+        tab += '(%s sec.)'%ctx.lastProcessing.total_seconds()
     tab += '<br/>'
     return tab
 

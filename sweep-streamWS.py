@@ -38,7 +38,6 @@ from rdflib import Variable
 
 import requests as http
 
-
 class Context(object):
     """docstring for Context"""
     def __init__(self):
@@ -141,6 +140,17 @@ def bo():
         rep += '</td>'
         rep += '<td>%d</td>'%c.val
         rep += '</tr>'
+    rep += '</table></td>'
+
+    rep += '<td><h1>P/R for users </h1>'
+    rep += '<table cellspacing="1" border="1" cellpadding="2">'
+    rep += '<thead><td>Code</td><td>Nb queries</td><td>Precision</td><td>Recall</td>'
+    with ctx.sweep.lck:
+        for (ip,v) in ctx.sweep.usersMemory.items() :
+            (nb, sumPrecision, sumRecall) = v
+            rep += '<tr>'
+            rep += '<td>%s</td><td>%d</td><td>%2.3f</td><td>%2.3f</td>'%(ip,nb,sumPrecision/nb,sumRecall/nb)
+            rep += '</tr>'
     rep += '</table></td>'
 
     t += rep + '<tr></table>'

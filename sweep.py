@@ -15,13 +15,10 @@ import multiprocessing as mp
 import datetime as dt
 import time
 
-import signal
-
 import csv
 from tools.tools import now, fromISO, existFile
 
 from tools.ssa import *
-
 
 from rdflib import Variable, URIRef, Literal
 
@@ -1016,93 +1013,6 @@ class SWEEP:  # Abstract Class
                     (nb, sumPrecision, sumRecall) = v
                     s = dict({'ip':ip, 'precision':sumPrecision/nb,'recall':sumRecall/nb, 'nb':nb})
                     writer.writerow(s)
-
-class GracefulInterruptHandler(object):
-
-    def __init__(self, sig=signal.SIGINT):
-        self.sig = sig
-
-    def __enter__(self):
-
-        self.interrupted = False
-        self.released = False
-
-        self.original_handler = signal.getsignal(self.sig)
-
-        def handler(signum, frame):
-            self.release()
-            self.interrupted = True
-
-        signal.signal(self.sig, handler)
-
-        return self
-
-    def __exit__(self, type, value, tb):
-        self.release()
-
-    def release(self):
-
-        if self.released:
-            return False
-
-        signal.signal(self.sig, self.original_handler)
-
-        self.released = True
-
-        return True
-
-
-#==================================================
-
-
-def makeLog(ip):
-    #print('Finding bgp')
-    node_log = etree.Element('log')
-    node_log.set('ip', ip)
-    return node_log
-
-
-def addBGP(n, bgp, node_log):
-    #print(serializeBGP2str([ x for (x,sm,pm,om,h) in bgp.tp_set]))
-    entry_node = etree.SubElement(node_log, 'entry')
-    entry_node.set('datetime', '%s' % bgp.time)
-    entry_node.set('logline', '%s' % n)
-    request_node = etree.SubElement(entry_node, 'request')
-    try:
-        bgp_node = serializeBGP([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
-        entry_node.insert(1, bgp_node)
-        query = 'select * where{ \n'
-        for tp in bgp.tp_set:
-            query += serialize2string(tp.s) + ' ' + serialize2string(tp.p) + \
-                ' ' + serialize2string(tp.o) + ' .\n'
-        query += ' }'
-        request_node.text = query
-    except Exception as e:
-        print('PB serialize BGP : %s\n%s\n%s', e.__str__(), query, bgp)
-    return node_log
-
-
-def save(node_log, lift2):
-    try:
-        print('Ecriture de "%s"' % lift2)
-        tosave = etree.tostring(
-            node_log,
-            encoding="UTF-8",
-            xml_declaration=True,
-            pretty_print=True,
-            doctype='<!DOCTYPE log SYSTEM "http://documents.ls2n.fr/be4dbp/log.dtd">')
-        try:
-            f = open(lift2, 'w')
-            f.write(tosave.decode('utf-8'))
-        except Exception as e:
-            print(
-                'PB Test Analysis saving %s : %s',
-                lift2,
-                e.__str__())
-        finally:
-            f.close()
-    except etree.DocumentInvalid as e:
-        print('PB Test Analysis, %s not validated : %s' % (lift2, e))
 
 #==================================================
 #==================================================
