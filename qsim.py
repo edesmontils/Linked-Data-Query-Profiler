@@ -514,9 +514,10 @@ if __name__ == '__main__':
         for file in file_set:
             if existFile(file):
                 (nbq, avgT, noOk, nbGap) = play(file, ctx, args.nb_processes, args.dataset, args.nbq, args.offset, args.doEmpty, dt.timedelta(minutes=args.period)  )
-                sumT = sumT + avgT
-                pbGap += nbGap
-                nb += 1
+                if avgT is not None :
+                    sumT = sumT + avgT
+                    pbGap += nbGap
+                    nb += 1
                 time.sleep(ctx.gap.total_seconds())
 
     except KeyboardInterrupt:
