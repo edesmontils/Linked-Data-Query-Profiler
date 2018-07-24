@@ -286,7 +286,7 @@ def run(inq, outq, ctx, datasource):
             print(e)
             pass
 
-        print('(%d)'%nbe,'Query:',query)
+        print('(%d)'%nbe)#,'Query:',query)
         no = 'qsim-'+str(nbe)
         bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
