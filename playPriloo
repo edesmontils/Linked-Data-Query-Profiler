@@ -1,0 +1,1 @@
+nohup python3.5 qsim.py -f priloo.cfg -d dbpedia3.8 -i 60 -u $1 /home/sweep/dataset/logs-20151031-all2/ >& res & 

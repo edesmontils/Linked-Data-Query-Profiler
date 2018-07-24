@@ -1,0 +1,1 @@
+python3.6 qsim.py -f mac-config-work.cfg -d dbpedia3.8 -i 60 -u $1 ../data/logs20151031/logs-20151031-all2/ >& res
