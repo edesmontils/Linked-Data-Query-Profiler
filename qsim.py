@@ -255,6 +255,8 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
         print('%d queries in gap'%nbOk)
         print('%d queries out of gap'%nbGap)
         return (len(result),avgT, nbOk, nbGap)
+    else:
+        return (0,dt.timedelta(minutes=0),0,0)
 
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
