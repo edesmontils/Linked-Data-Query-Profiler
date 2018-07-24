@@ -251,7 +251,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
             avgT = sumT/len(result)
             print('Average processing',avgT )
         else:
-            avgT = None
+            avgT = dt.timedelta(minutes=0)
         print('%d queries in gap'%nbOk)
         print('%d queries out of gap'%nbGap)
         return (len(result),avgT, nbOk, nbGap)
