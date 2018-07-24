@@ -103,9 +103,9 @@ class TriplePatternQuery(TripplePattern):
         super(TriplePatternQuery, self).__init__(s, p, o)
         (self.time, self.client, self.sm, self.pm,
          self.om) = (time, client, sm, pm, om)
-        self.su = set()
-        self.pu = set()
-        self.ou = set()
+        # self.su = set()
+        # self.pu = set()
+        # self.ou = set()
 
     def isDump(self):  # tp is <?s ?p ?o> ?
         return isinstance(self.s, Variable) and isinstance(self.p, Variable) and isinstance(self.o, Variable)
@@ -297,10 +297,12 @@ class BasicGraphPattern:
             if SWEEP_DEBUG_BGP_BUILD:
                 print('_____', '\n\t\t Comparaison de :',
                       ntpq.toStr(), '\n\t\t avec le TP :', tpq.toStr())
-                print('\t\tbsm:', listToStr(tpq.sm), '\n\t\t\tbsu:', listToStr(tpq.su),
-                      '\n\t\tbpm:', listToStr(tpq.pm), '\n\t\t\tbpu:', listToStr(tpq.pu),
-                      '\n\t\tbom:', listToStr(tpq.om), '\n\t\t\tbou:', listToStr(tpq.ou),)
-
+                print('\t\tbsm:', listToStr(tpq.sm), '\n\t\t\tbsu:',
+                      '\n\t\tbpm:', listToStr(tpq.pm), '\n\t\t\tbpu:',
+                      '\n\t\tbom:', listToStr(tpq.om), '\n\t\t\tbou:')
+                # print('\t\tbsm:', listToStr(tpq.sm), '\n\t\t\tbsu:', listToStr(tpq.su),
+                #       '\n\t\tbpm:', listToStr(tpq.pm), '\n\t\t\tbpu:', listToStr(tpq.pu),
+                #       '\n\t\tbom:', listToStr(tpq.om), '\n\t\t\tbou:', listToStr(tpq.ou))
             (couv, d) = ntpq.nestedLoopOf2(tpq)
             #couv : nombre de mappings trouvés (hypothèse de double injection)
             #d : indique les "constantes" de ntpq qui font l'objet d'injection 
@@ -465,9 +467,9 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                                         ), '\n\t\t avec ', candTP.toStr())
                                     bgp.add(candTP, new_tpq.sign())
                                 (vs,vp,vo) = mapVal
-                                if vs is not None: fromTP.su.add(vs)
-                                if vp is not None: fromTP.pu.add(vp)
-                                if vo is not None: fromTP.ou.add(vo)
+                                # if vs is not None: fromTP.su.add(vs)
+                                # if vp is not None: fromTP.pu.add(vp)
+                                # if vo is not None: fromTP.ou.add(vo)
                                 if ctx.optimistic:
                                     bgp.time = time
                                 break #on en a trouvé un bon... on arrête de chercher !
