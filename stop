@@ -1,0 +1,4 @@
+killall python3.5
+killall node
+
+

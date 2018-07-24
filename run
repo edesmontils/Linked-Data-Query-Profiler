@@ -1,0 +1,4 @@
+nohup ../../ldfServer/node_modules/ldf-server/bin/ldf-server ../../ldfServer/node_modules/ldf-server/config/config-defaults.json >& resLDFServer.txt &
+nohup python3.5 sweep-streamWS.py -f priloo.cfg >& resSWEEP &
+nohup python3.5 qsim-WS.py -f priloo.cfg >& resQSIM &
+
