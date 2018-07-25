@@ -18,12 +18,14 @@ import time
 import csv
 from tools.tools import now, fromISO, existFile
 
+from io import StringIO
+
 from tools.ssa import *
 
 from rdflib import Variable, URIRef, Literal
 
 from lxml import etree  # http://lxml.de/index.html#documentation
-from lib.bgp import serialize2string, egal, calcPrecisionRecall, canonicalize_sparql_bgp, serializeBGP
+from lib.bgp import serialize2string, egal, calcPrecisionRecall, canonicalize_sparql_bgp, serializeBGP, unSerialize
 
 from collections import OrderedDict
 
@@ -297,9 +299,9 @@ class BasicGraphPattern:
             if SWEEP_DEBUG_BGP_BUILD:
                 print('_____', '\n\t\t Comparaison de :',
                       ntpq.toStr(), '\n\t\t avec le TP :', tpq.toStr())
-                print('\t\tbsm:', listToStr(tpq.sm), '\n\t\t\tbsu:',
-                      '\n\t\tbpm:', listToStr(tpq.pm), '\n\t\t\tbpu:',
-                      '\n\t\tbom:', listToStr(tpq.om), '\n\t\t\tbou:')
+                print('\t\tbsm:', listToStr(tpq.sm), 
+                      '\n\t\tbpm:', listToStr(tpq.pm), 
+                      '\n\t\tbom:', listToStr(tpq.om) )
                 # print('\t\tbsm:', listToStr(tpq.sm), '\n\t\t\tbsu:', listToStr(tpq.su),
                 #       '\n\t\tbpm:', listToStr(tpq.pm), '\n\t\t\tbpu:', listToStr(tpq.pu),
                 #       '\n\t\tbom:', listToStr(tpq.om), '\n\t\t\tbou:', listToStr(tpq.ou))
@@ -347,6 +349,7 @@ def processAgregator(in_queue, out_queue, ctx):
     purge_timeout = (ctx.gap*SWEEP_PURGE_TIMEOUT).total_seconds()
     currentTime = now()
     elist = dict()
+    entry_id = 0
     print('[processAgregator] Started :\n\t- entry_timeout :',entry_timeout,'\n\t- purge_timeout : ',purge_timeout)
     try:
 
@@ -354,11 +357,17 @@ def processAgregator(in_queue, out_queue, ctx):
 
         while inq is not None:
             (id, x, val) = inq
+
+
+
             if x == SWEEP_IN_ENTRY:
                 # print('[processAgregator] New Entry')
                 (s, p, o, t, cl) = val
                 currentTime = now()
                 elist[id] = (s, p, o, currentTime, cl, set(), set(), set())
+
+
+
             elif x == SWEEP_IN_DATA:
                 # print('[processAgregator] New Data In')
                 if id in elist:  # peut être absent car purgé
@@ -368,14 +377,64 @@ def processAgregator(in_queue, out_queue, ctx):
                     if isinstance(s, Variable): sm.add(xs)
                     if isinstance(p, Variable): pm.add(xp)
                     if isinstance(o, Variable): om.add(xo)
+
+
+
             elif x == SWEEP_IN_END:
                 # print('[processAgregator] In ended')
                 mss = elist.pop(id, None)
                 if mss is not None:  # peut être absent car purgé
                     out_queue.put((id, mss))
+
+
+
+
             elif x == SWEEP_IN_LOG:
+
                 # print('[processAgregator] New Log Entry')
-                out_queue.put((id, val))
+                try:
+                    (client, data, time) = val
+
+                    tree = etree.parse(StringIO(data), ctx.parser)
+                    # nbEntries += 1
+                    entry = None
+                    eid = entry_id
+                    entry_id += 1
+
+                    (s,p,o,t,c,sm,pm,om) = (None,None,None,time,client,set(),set(),set())
+
+                    for e in tree.getroot():
+                        if e.tag == 'e':
+                            if e[0].get('type')=='var' : e[0].set('val','s')
+                            if e[1].get('type')=='var' : e[1].set('val','p')
+                            if e[2].get('type')=='var' : e[2].set('val','o')
+                            s = unSerialize(e[0])
+                            p = unSerialize(e[1])
+                            o = unSerialize(e[2])
+
+                        elif e.tag == 'd':
+                            if isinstance(s,Variable): sm.add(unSerialize(e[0]))
+                            if isinstance(p,Variable): pm.add(unSerialize(e[1]))
+                            if isinstance(o,Variable): om.add(unSerialize(e[2]))
+
+                        elif e.tag == 'm':
+                            # s = unSerialize(e[0])
+                            # p = unSerialize(e[1])
+                            # o = unSerialize(e[2])
+                            # print('new meta : ',toStr(s,p,o))
+                            pass
+                        else:
+                            pass
+
+                except Exception as e:
+                    print('Exception',e)
+                    print('About:',data)
+                else: out_queue.put((eid,  (s,p,o,t,c,sm,pm,om)  ))
+
+                # out_queue.put((id, val))
+
+
+
             else:  # SWEEP_PURGE...
                 # print('[processAgregator] purge (%d waiting entries)'%len(elist))
                 pass
@@ -463,8 +522,7 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                                     bgp.update(tp, new_tpq)
                                 else:  # C'est un nouveau TPQ du BGP !
                                     if SWEEP_DEBUG_BGP_BUILD:
-                                        print('\t\t Ajout de ', new_tpq.toStr(
-                                        ), '\n\t\t avec ', candTP.toStr())
+                                        print('\t\t Ajout de ', new_tpq.toStr(), '\n\t\t avec ', candTP.toStr())
                                     bgp.add(candTP, new_tpq.sign())
                                 (vs,vp,vo) = mapVal
                                 # if vs is not None: fromTP.su.add(vs)
@@ -487,8 +545,7 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                                         trouve = False
                                     else:  # C'est un nouveau TPQ du BGP !
                                         if SWEEP_DEBUG_BGP_BUILD:
-                                            print('\t\t Ajout de ', new_tpq.toStr(
-                                            ), '\n\t\t avec ', candTP.toStr())
+                                            print('\t\t Ajout de ', new_tpq.toStr(), '\n\t\t avec ', candTP.toStr())
                                         bgp.add(candTP, new_tpq.sign())
                                         if ctx.optimistic:
                                             bgp.time = time
@@ -885,6 +942,8 @@ class SWEEP:  # Abstract Class
 
         self.memoryInQueue = mp.Queue()
 
+        self.parser = etree.XMLParser(recover=True, strip_cdata=True)
+
         self.dataProcess = mp.Process(target=processAgregator, args=(
             self.dataQueue, self.entryQueue, self))
         self.entryProcess = mp.Process(target=processBGPDiscover, args=(
@@ -897,6 +956,7 @@ class SWEEP:  # Abstract Class
         self.entryProcess.start()
         self.validationProcess.start()
         self.memoryProcess.start()
+
 
     def setTimeout(self, to):
         print('chg to:', to.total_seconds())

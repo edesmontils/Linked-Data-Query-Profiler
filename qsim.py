@@ -246,7 +246,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
             print('=========> Query %s : %s / %s'%(no,m,v), ' in ',t, 'second(s)')
             if m in ("Query ok", "Empty Query"): 
                 nbOk += 1
-            elif m in ("TOGAP") :
+            elif "TOGAP" in m :
                 nbGap +=1
         print('The end for %s' % file)
         if len(result)>0: 
@@ -318,17 +318,22 @@ def run(inq, outq, ctx, datasource):
                     after = now()
                     processing = after - before
                     # print('(%d)'%nbe,':',rep)
-                    if rep == []:
-                       print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid)," Empty query !!!")
-                       url = sweep+'/inform'
-                       s = http.post(url,data={'data':mess,'errtype':'Empty', 'no':no})
-                       outq.put( (nbe, noq, processing, "Empty Query",valid)  )
-                    else: 
-                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),': [...]')#,rep)
-                        outq.put( (nbe, noq, processing, "Query ok",valid)  )
                     if processing > gap:
-                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),'!!!!!!!!! hors Gap (%s) !!!!!!!!!'%gap.total_seconds())
-                        outq.put( (nbe, noq, processing, "TOGAP",valid)  )
+                        messTO = '!!!!!!!!! hors Gap (%s) !!!!!!!!!'%gap.total_seconds()
+                        code = ' TOGAP'
+                    else : 
+                        messTO = ''
+                        code = ''
+                    if rep == []:
+                        messEmpty = " Empty query !!! "+messTO
+                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),messEmpty)
+                        url = sweep+'/inform'
+                        s = http.post(url,data={'data':mess,'errtype':'Empty', 'no':no})
+                        outq.put( (nbe, noq, processing, "Empty Query"+code,valid)  )
+                    else: 
+                        messOk = ': [...] '+ messTO
+                        print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),messOk)#,rep)
+                        outq.put( (nbe, noq, processing, "Query ok"+code,valid)  )
                     break
 
                 except TPFClientError as e :

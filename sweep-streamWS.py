@@ -321,7 +321,7 @@ def processQuery():
             ip = q.get('client')
 
             query = q.text
-            time = fromISO(q.attrib['time']) # now()# 
+            time = fromISO(q.attrib['time']) 
             print('@ ', time)
             # print('fromISO ', fromISO(q.attrib['time']) )
             print('now', now())
@@ -377,80 +377,17 @@ def processQuery():
 @app.route('/data', methods=['post','get'])
 def processData():
     if request.method == 'POST':
-        data = request.form['data']
-        i = request.form['no']
-        time = fromISO(request.form['time'])
-
-        #print(i,time)
-        # #print('Receiving data:',data)
-
-        ip = request.remote_addr
-        ip2 = request.form['ip']
-
-        client = ip2 # request.form['ip']
+        client = request.form['ip']
         if client is None:
-            client = ip
+            client = request.remote_addr
         elif client in ["undefined","", "undefine"]:
-            client = ip
+            client = request.remote_addr
         elif "::ffff:" in client:
             client = client[7:]
 
-        #print('DATA - ip-remote:',ip,' ip-post:',ip2, ' choix:',client)
-
-        try:
-            tree = etree.parse(StringIO(data), ctx.parser)
-            ctx.nbEntries += 1
-            entry = (None, None, None, now(), None, set(),set(),set())
-            #currentTime = now()
-            entry_id = ctx.entry_id
-            ctx.entry_id += 1
-            for e in tree.getroot():
-                if e.tag == 'e':
-                    if e[0].get('type')=='var' : e[0].set('val','s')
-                    if e[1].get('type')=='var' : e[1].set('val','p')
-                    if e[2].get('type')=='var' : e[2].set('val','o')
-                    s = unSerialize(e[0])
-                    p = unSerialize(e[1])
-                    o = unSerialize(e[2])
-
-                    #currentTime = now()
-                    entry = (s,p,o,time,client,set(),set(),set())
-
-                    # print('new TPQ : ',toStr(s,p,o))
-
-                elif e.tag == 'd':
-                    xs = unSerialize(e[0])
-                    xp = unSerialize(e[1])
-                    xo = unSerialize(e[2])
-
-                    (s,p,o,t,c,sm,pm,om) = entry
-                    # currentTime = max(currentTime,t) + dt.timedelta(microseconds=1)
-                    if isinstance(s,Variable): sm.add(xs)
-                    if isinstance(p,Variable): pm.add(xp)
-                    if isinstance(o,Variable): om.add(xo)
-
-                    entry = (s,p,o,t,c,sm,pm,om)
-
-                    # ctx.sweep.putData(i, xs, xp, xo)
-                    # print('new data : ',toStr(xs,xp,xo))
-
-                elif e.tag == 'm':
-                    # s = unSerialize(e[0])
-                    # p = unSerialize(e[1])
-                    # o = unSerialize(e[2])
-                    # print('new meta : ',toStr(s,p,o))
-                    pass
-                else:
-                    pass
-
-            # ctx.sweep.putEnd(i)
-            ctx.sweep.putLog(entry_id,entry)
-
-            return jsonify(result=True)
-        except Exception as e:
-            print('Exception',e)
-            print('About:',data)
-            return jsonify(result=False)
+        ctx.nbEntries += 1
+        ctx.sweep.putLog(request.form['no'] ,(client, request.form['data'], fromISO(request.form['time'])))
+        return jsonify(result=True)
     else:
         print('"data" not implemented for HTTP GET')
         return jsonify(result=False)

@@ -19,7 +19,7 @@ window.onbeforeunload = function (evt) {
 
 monitor = new Ajax.PeriodicalUpdater('get','/sweep', {
     method: 'get',
-    frequency: 1,
+    frequency: 2,
     decay: 1.1,
     onSuccess: function (trs) {
             bo = trs.responseText
