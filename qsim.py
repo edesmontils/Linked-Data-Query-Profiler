@@ -42,6 +42,8 @@ from scipy.stats import uniform
 
 import os.path
 
+import unicodedata
+
 class Context(object):
     """docstring for Context"""
 
@@ -272,6 +274,9 @@ def run(inq, outq, ctx, datasource):
 
     while mss is not None:
         (nbe,noq,query, bgp_list,d, oldDate,ip,valid) = mss
+
+        query = unicodedata.normalize("NFKD", query)
+
         duration = max(dt.timedelta.resolution, d-dt.datetime.now())
         print('(%d)'%nbe,'Sleep:',duration.total_seconds(),' second(s)')
         time.sleep(duration.total_seconds())
@@ -286,7 +291,7 @@ def run(inq, outq, ctx, datasource):
             print(e)
             pass
 
-        print('(%d)'%nbe)#,'Query:',query)
+        print('(%d)'%nbe,'Query:',query)
         no = 'qsim-'+str(nbe)
         bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
