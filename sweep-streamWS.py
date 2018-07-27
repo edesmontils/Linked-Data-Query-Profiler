@@ -34,8 +34,6 @@ from flask import Flask, render_template, request, jsonify
 from urllib.parse import urlparse, unquote_plus
 from configparser import ConfigParser, ExtendedInterpolation
 
-from rdflib import Variable
-
 import requests as http
 
 class Context(object):
@@ -160,19 +158,12 @@ def bo():
 @app.route('/pr')
 def doPR():
     nb = ctx.sweep.stat['nbQueries']
-    #nbbgp = ctx.sweep.stat['nbBGP']
     if nb>0:
         avgPrecision = ctx.sweep.stat['sumPrecision']/nb
         avgRecall = ctx.sweep.stat['sumRecall']/nb
-        #avgQual = ctx.sweep.stat['sumQuality']/nb
     else:
         avgPrecision = 0
         avgRecall = 0
-        #avgQual = 0
-    #if nbbgp>0 :
-    #    Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
-    #else:
-    #    Acuteness = 0
 
     return jsonify(result=(avgPrecision,avgRecall))
 
@@ -181,18 +172,6 @@ def sweep():
     ctx.cpt += 1
     nb = ctx.sweep.stat['nbQueries']
     nbbgp = ctx.sweep.stat['nbBGP']
-    #if nb>0:
-        #avgPrecision = ctx.sweep.stat['sumPrecision']/nb
-        #avgRecall = ctx.sweep.stat['sumRecall']/nb
-        #avgQual = ctx.sweep.stat['sumQuality']/nb
-    #else:
-        #avgPrecision = 0
-        #avgRecall = 0
-        #avgQual = 0
-    #if nbbgp>0 :
-    #    Acuteness = ctx.sweep.stat['sumSelectedBGP'] / nbbgp
-    #else:
-    #    Acuteness = 0
 
     rep = '<h1>Information</h1><table><tr><td>'
 
@@ -476,7 +455,6 @@ if __name__ == '__main__':
     else:
         ctx.to = atimeout
 
-    if aOptimistic: ctx.sweep.swapOptimistic()
     ctx.opt = aOptimistic
 
     ctx.nlast = anlast
