@@ -29,6 +29,8 @@ import requests as http
 from urllib.parse import urlparse, quote_plus
 from configparser import ConfigParser, ExtendedInterpolation
 
+from tools.Socket import SocketClient, MsgProcessor
+
 
 class Context(object):
     """docstring for Context"""
@@ -280,7 +282,7 @@ def treat(query, bgp_list, ip, datasource):
 
         bgp_list = '<l>'+bgp_list+'</l>'
         print(bgp_list)
-
+        res= []
         #s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': bgp_list})
 
         # print('res:',s.json()['result'])
@@ -292,17 +294,19 @@ def treat(query, bgp_list, ip, datasource):
             # ctx.BGPNb += 1
             # bgp_uri = ctx.addr_ext+'/bgp/'+str(ctx.BGPNb)
             # ctx.BGPRefList[ctx.BGPNb] = bgp_list
-            res = ctx.listeSP[datasource].query(
-                '#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+str(ip)+'\n'+query)
+            res = ctx.listeSP[datasource].query('#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+str(ip)+'\n'+query)
             after = now()
             ctx.lastProcessing = after - before
             # print('(%d)'%nbe,':',rep)
             if res == []:
                 print('(%d, %s sec.)' % (
                     nbe, ctx.lastProcessing.total_seconds()), "Empty query !!!")
-                url = ctx.sweep+'/inform'
-                s = http.post(
-                    url, data={'data': mess, 'errtype': 'Empty', 'no': no})
+                # url = ctx.sweep+'/inform'
+                # s = http.post(
+                #     url, data={'data': mess, 'errtype': 'Empty', 'no': no})
+                client = SocketClient(host = ctx.sweep, port = 5003, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'Empty', 'no': no}
+                client.sendMsg2(data)
             else:
                 # ,res)
                 print('(%d, %s sec.)' %
@@ -314,42 +318,57 @@ def treat(query, bgp_list, ip, datasource):
         except TPFClientError as e:
             print('(%d)' % nbe, 'Exception TPFClientError : %s' % e.__str__())
             if doPR:
-                url = ctx.sweep+'/inform'
-                s = http.post(
-                    url, data={'data': mess, 'errtype': 'CltErr', 'no': no})
-                print('(%d)' % nbe, 'Request cancelled : ', s.json()['result'])
+                # url = ctx.sweep+'/inform'
+                # s = http.post(
+                #     url, data={'data': mess, 'errtype': 'CltErr', 'no': no})
+                print('(%d)' % nbe, 'Request cancelled : ')#, s.json()['result'])
+                client = SocketClient(host = ctx.sweep, port = 5003, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'CltErr', 'no': no}
+                client.sendMsg2(data)
             res = 'Error'
         except TimeOut as e:
             print('(%d)' % nbe, 'Timeout :', e)
             if doPR:
-                url = ctx.sweep+'/inform'
-                s = http.post(
-                    url, data={'data': mess, 'errtype': 'TO', 'no': no})
-                print('(%d)' % nbe, 'Request cancelled : ', s.json()['result'])
+                # url = ctx.sweep+'/inform'
+                # s = http.post(
+                #     url, data={'data': mess, 'errtype': 'TO', 'no': no})
+                print('(%d)' % nbe, 'Request cancelled : ')#, s.json()['result'])
+                client = SocketClient(host = ctx.sweep, port = 5003, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'TO', 'no': no}
+                client.sendMsg2(data)
             res = 'Error'
         except QueryBadFormed as e:
             print('(%d)' % nbe, 'Query Bad Formed :', e)
             if doPR:
-                url = ctx.sweep+'/inform'
-                s = http.post(
-                    url, data={'data': mess, 'errtype': 'QBF', 'no': no})
-                print('(%d)' % nbe, 'Request cancelled : ', s.json()['result'])
+                # url = ctx.sweep+'/inform'
+                # s = http.post(
+                #     url, data={'data': mess, 'errtype': 'QBF', 'no': no})
+                print('(%d)' % nbe, 'Request cancelled : ')#, s.json()['result'])
+                client = SocketClient(host = ctx.sweep, port = 5003, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'QBF', 'no': no}
+                client.sendMsg2(data)                
             res = 'Error:'+e.__str__()
         except EndpointException as e:
             print('(%d)' % nbe, 'Endpoint Exception :', e)
             if doPR:
-                url = ctx.sweep+'/inform'
-                s = http.post(
-                    url, data={'data': mess, 'errtype': 'EQ', 'no': no})
-                print('(%d)' % nbe, 'Request cancelled : ', s.json()['result'])
+                # url = ctx.sweep+'/inform'
+                # s = http.post(
+                #     url, data={'data': mess, 'errtype': 'EQ', 'no': no})
+                print('(%d)' % nbe, 'Request cancelled : ')#, s.json()['result'])
+                client = SocketClient(host = ctx.sweep, port = 5003, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'EQ', 'no': no}
+                client.sendMsg2(data)                                
             res = 'Error'
         except Exception as e:
             print('(%d)' % nbe, 'Exception execution query... :', e)
             if doPR:
-                url = ctx.sweep+'/inform'
-                s = http.post(
-                    url, data={'data': mess, 'errtype': 'Other', 'no': no})
-                print('(%d)' % nbe, 'Request cancelled : ', s.json()['result'])
+                # url = ctx.sweep+'/inform'
+                # s = http.post(
+                #     url, data={'data': mess, 'errtype': 'Other', 'no': no})
+                print('(%d)' % nbe, 'Request cancelled : ')#, s.json()['result'])
+                client = SocketClient(host = ctx.sweep, port = 5003, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'Other', 'no': no}
+                client.sendMsg2(data)                
             res = 'Error'
     except Exception as e:
         print('Exception', e)
@@ -446,7 +465,7 @@ if __name__ == '__main__':
         if ref.text is None:
             ref.text = ''
         print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s %s' % asweep])
+        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s xxxxx'])
         sp.setEngine(atpfClient)
         #if ato: sp.setTimeout(ato)
         ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,

@@ -16,7 +16,7 @@ import datetime as dt
 import time
 
 import csv
-from tools.tools import now, fromISO, existFile
+from tools.tools import now, fromISO, existFile, date2str
 
 from io import StringIO
 
@@ -25,12 +25,20 @@ from tools.ssa import *
 from rdflib import Variable, URIRef, Literal
 
 from lxml import etree  # http://lxml.de/index.html#documentation
-from lib.bgp import serialize2string, egal, calcPrecisionRecall, canonicalize_sparql_bgp, serializeBGP, unSerialize
+from lib.bgp import serialize2string, egal, calcPrecisionRecall, canonicalize_sparql_bgp, serializeBGP, unSerialize, simplifyVars, unSerializeBGP
+from lib.QueryManager import QueryManager
 
 from collections import OrderedDict
 
 from functools import reduce
 
+import json
+
+from tools.Socket import SocketServer, MsgProcessor
+
+from configparser import ConfigParser, ExtendedInterpolation
+from urllib.parse import urlparse, unquote_plus
+from operator import itemgetter
 #==================================================
 
 SWEEP_IN_ENTRY = 1
@@ -344,128 +352,222 @@ class BasicGraphPattern:
 
 #==================================================
 
-def processAgregator(in_queue, out_queue, ctx):
-    entry_timeout = ctx.gap*SWEEP_ENTRY_TIMEOUT
-    purge_timeout = (ctx.gap*SWEEP_PURGE_TIMEOUT).total_seconds()
-    currentTime = now()
-    elist = dict()
-    entry_id = 0
-    print('[processAgregator] Started :\n\t- entry_timeout :',entry_timeout,'\n\t- purge_timeout : ',purge_timeout)
-    try:
+class DataCollectorMsgProcessor(MsgProcessor):
+    def __init__(self,out_queue,ctx):
+        super(DataCollectorMsgProcessor, self).__init__()
+        self.out_queue = out_queue
+        self.entry_id = 0
+        self.ctx = ctx
 
-        inq = in_queue.get()
+    def processIn(self,mesg) :
+        inLog = json.loads(mesg)
+        self.ctx.nbEntries.value += 1
 
-        while inq is not None:
-            (id, x, val) = inq
+        time = fromISO(inLog['time'])
 
+        # client = inLog['ip']
+        # if client is None:
+        #     client = self.cl_ip
+        # elif client in ["undefined","", "undefine"]:
+        #     client = self.cl_ip
+        # elif "::ffff:" in client:
+        #     client = client[7:]
+        client = 'Batman'
 
+        data = inLog['data']
+        try:
+            tree = etree.parse(StringIO(data), self.ctx.parser)
+            # nbEntries += 1
+            entry = None
+            eid = self.entry_id
+            self.entry_id += 1
 
-            if x == SWEEP_IN_ENTRY:
-                # print('[processAgregator] New Entry')
-                (s, p, o, t, cl) = val
-                currentTime = now()
-                elist[id] = (s, p, o, currentTime, cl, set(), set(), set())
+            (s,p,o,t,c,sm,pm,om) = (None,None,None,time,client,set(),set(),set())
 
+            for e in tree.getroot():
+                if e.tag == 'e':
+                    if e[0].get('type')=='var' : e[0].set('val','s')
+                    if e[1].get('type')=='var' : e[1].set('val','p')
+                    if e[2].get('type')=='var' : e[2].set('val','o')
+                    s = unSerialize(e[0])
+                    p = unSerialize(e[1])
+                    o = unSerialize(e[2])
+                    print('[DataCollector] in : ',toStr(s,p,o))
+                elif e.tag == 'd':
+                    if isinstance(s,Variable): sm.add(unSerialize(e[0]))
+                    if isinstance(p,Variable): pm.add(unSerialize(e[1]))
+                    if isinstance(o,Variable): om.add(unSerialize(e[2]))
 
+                elif e.tag == 'm':
+                    # s = unSerialize(e[0])
+                    # p = unSerialize(e[1])
+                    # o = unSerialize(e[2])
+                    # print('new meta : ',toStr(s,p,o))
+                    pass
+                else:
+                    pass
+        except Exception as e:
+            print('[DataCollector] ','Exception',e)
+            print('[DataCollector] ','About:',data)
+        else: self.out_queue.put((eid,  (s,p,o,t,c,sm,pm,om)  ))
 
-            elif x == SWEEP_IN_DATA:
-                # print('[processAgregator] New Data In')
-                if id in elist:  # peut être absent car purgé
-                    (s, p, o, t, _, sm, pm, om) = elist[id]
-                    (xs, xp, xo) = val
-                    currentTime = max(currentTime, t) + dt.timedelta(microseconds=1)
-                    if isinstance(s, Variable): sm.add(xs)
-                    if isinstance(p, Variable): pm.add(xp)
-                    if isinstance(o, Variable): om.add(xo)
-
-
-
-            elif x == SWEEP_IN_END:
-                # print('[processAgregator] In ended')
-                mss = elist.pop(id, None)
-                if mss is not None:  # peut être absent car purgé
-                    out_queue.put((id, mss))
-
-
-
-
-            elif x == SWEEP_IN_LOG:
-
-                # print('[processAgregator] New Log Entry')
-                try:
-                    (client, data, time) = val
-
-                    tree = etree.parse(StringIO(data), ctx.parser)
-                    # nbEntries += 1
-                    entry = None
-                    eid = entry_id
-                    entry_id += 1
-
-                    (s,p,o,t,c,sm,pm,om) = (None,None,None,time,client,set(),set(),set())
-
-                    for e in tree.getroot():
-                        if e.tag == 'e':
-                            if e[0].get('type')=='var' : e[0].set('val','s')
-                            if e[1].get('type')=='var' : e[1].set('val','p')
-                            if e[2].get('type')=='var' : e[2].set('val','o')
-                            s = unSerialize(e[0])
-                            p = unSerialize(e[1])
-                            o = unSerialize(e[2])
-
-                        elif e.tag == 'd':
-                            if isinstance(s,Variable): sm.add(unSerialize(e[0]))
-                            if isinstance(p,Variable): pm.add(unSerialize(e[1]))
-                            if isinstance(o,Variable): om.add(unSerialize(e[2]))
-
-                        elif e.tag == 'm':
-                            # s = unSerialize(e[0])
-                            # p = unSerialize(e[1])
-                            # o = unSerialize(e[2])
-                            # print('new meta : ',toStr(s,p,o))
-                            pass
-                        else:
-                            pass
-
-                except Exception as e:
-                    print('Exception',e)
-                    print('About:',data)
-                else: out_queue.put((eid,  (s,p,o,t,c,sm,pm,om)  ))
-
-                # out_queue.put((id, val))
-
-
-
-            else:  # SWEEP_PURGE...
-                # print('[processAgregator] purge (%d waiting entries)'%len(elist))
-                pass
-
-            # purge les entrées trop vieilles !
-            old = []
-            for id in elist:
-                (s, p, o, t, _, sm, pm, om) = elist[id]
-                if (currentTime - t) > entry_timeout:
-                    old.append(id)
-            for id in old:
-                v = elist.pop(id)
-                out_queue.put((id, v))
-
-            try:
-                inq = in_queue.get(timeout=purge_timeout)
-            except Empty:
-                currentTime = now()
-                inq = (0, SWEEP_PURGE, None)
-
-    except KeyboardInterrupt:
-        # penser à purger les dernières entrées -> comme une fin de session
-        pass
-    finally:
-        for v in elist:
-            out_queue.put((v, elist.pop(v)))
+def processDataCollector(out_queue, ctx):
+    print('[processDataCollector] Started ')
+    server = SocketServer(port=5005,ServerMsgProcessor = DataCollectorMsgProcessor(out_queue,ctx) )
+    server.run2()
     out_queue.put(None)
-    print('[processAgregator] Stopped')
+    print('[processDataCollector] Stopped')
 
 #==================================================
+class QueryCollectorMsgProcessor(MsgProcessor):
+    def __init__(self,out_queue,ctx):
+        super(QueryCollectorMsgProcessor, self).__init__()
+        self.out_queue = out_queue
+        self.entry_id = 0
+        self.ctx = ctx
 
+    def processIn(self,mesg) :
+        inQuery = json.loads(mesg)
+        self.entry_id += 1
+        path = inQuery['path']
+        print('[QueryCollector] %s '%path)
+        if path == "put" :
+            data = inQuery['data']
+            queryID = inQuery['no']
+
+            # print('Receiving request:',data)
+            try:
+                tree = etree.parse(StringIO(data), self.ctx.parser)
+                q = tree.getroot()
+
+                client = q.get('client')
+                # if client is None:
+                #     q.set('client',str(self.cl_ip) )
+                # elif client in ["undefined","", "undefine"]:
+                #     q.set('client',str(self.cl_ip) )
+                # elif "::ffff:" in client:
+                #     q.set('client', client[7:])
+                # else : q.set('client',client)
+                q.set('client','Batman')
+
+                print('[QueryCollector] QUERY - ip-remote:',self.cl_ip,' client:',client, ' choix:',q.get('client'))
+                ip = q.get('client')
+
+                query = q.text.strip()
+                time = fromISO(q.attrib['time']) 
+                print('@ ', time)
+                # print('fromISO ', fromISO(q.attrib['time']) )
+                print('now', now())
+                if query.startswith('#bgp-list#') :
+                    t = query.split('\n')
+                    bgp_list = unquote_plus(t[0][10:])
+                    del t[0]
+                    queryCode = t[0][8:]
+                    del t[0]
+                    query = '\n'.join(t)
+                else:
+                    bgp_list = '<l/>'
+                    queryCode = ip
+
+                l = []
+                print('[QueryCollector] ---',queryCode,'---')
+                print('[QueryCollector] ',query)
+                print('[QueryCollector] ',bgp_list)
+                lbgp = etree.parse(StringIO(bgp_list), self.ctx.parser)
+                for x in lbgp.getroot():
+                    bgp = unSerializeBGP(x)
+                    l.append(bgp)
+
+                if len(l) == 0:
+                    print('[QueryCollector] ','BGP list empty... extracting BGP from the query')
+                    (bgp,nquery) = self.ctx.qm.extractBGP(query)
+                    query = nquery
+                    l.append(bgp)
+
+
+                self.ctx.nbQueries.value += len(l)
+                if queryID =='ldf-client':
+                    pass #queryID = queryID + str(ctx.nbQueries)
+                print('[QueryCollector] ','ID',queryID)
+                rang = 0
+                for bgp in l :
+                    rang += 1
+                    with self.ctx.qId.get_lock():
+                        self.ctx.qId.value += 1
+                        qId = self.ctx.qId.value
+                        if queryID is None:
+                            queryID = 'id'+str(qId)
+                    self.out_queue.put(
+                        (SWEEP_IN_QUERY, qId, (time, ip, query, bgp, str(queryID)+'_'+str(rang),queryCode)))
+
+            except Exception as e:
+                print('[QueryCollector] ','Exception',e)
+                print('[QueryCollector] ','About:',data)
+
+        elif path == "del" :
+            x = inQuery['x ']
+            print('[QueryCollector] ','del')
+            self.out_queue.put((SWEEP_OUT_QUERY, 0, x))
+
+        elif path == 'inform' :
+            inQuery = json.loads(mesg)
+            #ip = request.remote_addr
+
+            errtype = inQuery['errtype']
+            queryNb = inQuery['no']
+            print('[QueryCollector] ','inform %s / %s'%(errtype,queryNb))
+            if errtype == 'QBF':
+                print('[QueryCollector] ','(%s)'%queryNb,'Query Bad Formed :',inQuery['data'])
+                # self.ctx.delQuery(queryNb)
+                self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
+                self.ctx.nbCancelledQueries += 1
+                self.ctx.nbQBF += 1
+            elif errtype == 'TO':
+                print('[QueryCollector] ','(%s)'%queryNb,'Time Out :',inQuery['data'])
+                # self.ctx.delQuery(queryNb)
+                self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
+                self.ctx.nbCancelledQueries += 1
+                self.ctx.nbTO += 1
+            elif errtype == 'CltErr':
+                print('[QueryCollector] ','(%s)'%queryNb,'TPF Client Error for :',inQuery['data'])
+                # self.ctx.delQuery(queryNb)
+                self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
+                self.ctx.nbCancelledQueries += 1
+                self.ctx.nbClientError += 1
+            elif errtype == 'EQ':
+                print('[QueryCollector] ','(%s)'%queryNb,'Error Query for :',inQuery['data'])
+                # self.ctx.delQuery(queryNb)
+                self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
+                self.ctx.nbCancelledQueries += 1
+                self.ctx.nbEQ += 1
+            elif errtype == 'Other':
+                print('[QueryCollector] ','(%s)'%queryNb,'Unknown Pb for query :',inQuery['data'])
+                # self.ctx.delQuery(queryNb)
+                self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
+                self.ctx.nbCancelledQueries += 1
+                self.ctx.nbOther += 1
+            elif errtype == 'Empty':
+                print('[QueryCollector] ','(%s)'%queryNb,'Empty for :',inQuery['data'])
+                self.ctx.nbEmpty += 1
+            else:
+                print('[QueryCollector] ','(%s)'%queryNb,'Unknown Pb for query :',inQuery['data'])
+                # self.ctx.delQuery(queryNb)
+                self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
+                self.ctx.nbCancelledQueries += 1
+                self.ctx.nbOther += 1
+
+        else :
+            pass
+
+        
+def processQueryCollector(out_queue, ctx):
+    print('[processQueryCollector] Started ')
+    server = SocketServer(port=5003,ServerMsgProcessor = QueryCollectorMsgProcessor(out_queue,ctx) )
+    server.run2()
+    out_queue.put(None)
+    print('[processQueryCollector] Stopped')
+
+#==================================================
 
 def processBGPDiscover(in_queue, val_queue, ctx):
     gap = ctx.gap
@@ -653,7 +755,7 @@ def processValidation(in_queue, memoryQueue, ctx):
 
             if mode == SWEEP_IN_QUERY:
                 # print('[processValidation] Query analysis')
-                ctx.stat['nbQueries'] += 1
+                # ctx.stat['nbQueries'] += 1
                 (time, ip, query, qbgp, queryID,queryCode) = val
                 currentTime = now()
                 if SWEEP_DEBUB_PR:
@@ -698,7 +800,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                             print('---')
                             print(currentTime, ' Deleting query', queryID)
                         queryList.pop(i)
-                        ctx.stat['nbQueries'] -= 1
+                        # ctx.stat['nbQueries'] -= 1
                         if bgp is not None:
                             if SWEEP_DEBUB_PR:
                                 print('-')
@@ -739,6 +841,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                 ctx.stat['sumRecall'] += recall
                 ctx.stat['sumPrecision'] += precision
                 ctx.stat['sumQuality'] += (recall+precision)/2
+                ctx.stat['nbQueries'] += 1
                 if bgp is not None:
                     if SWEEP_DEBUB_PR:
                         print(".\n".join( [tp.toStr() for tp in bgp.tp_set]) )
@@ -801,11 +904,6 @@ def addBGP2Rank(bgp, nquery, line, precision, recall, ranking):
         ranking[i] = (now(), d, n+1, query, ll, p+precision, r+recall)
     else:
         ranking.append((now(),bgp, 1, nquery, {line}, precision, recall))
-
-# todo :
-# - faire deux mémoires pour les BGPs, une court terme sur 10*gap par exemple avec la méthode sûre et une long terme avec algo ssc.
-# - faire une sauvegarde incrémentale pour permettre de ne concervé que ce qui est nécessaire pour la mémoire à court terme.
-# - faire aussi les deux mémoires pour les requêtes
 
 def processMemory(ctx, duration, inQueue):
     sscBGP = SpaceSavingCounter(ctx.memSize)
@@ -901,19 +999,22 @@ def processMemory(ctx, duration, inQueue):
     except KeyboardInterrupt:
         pass
     finally :
+        # ctx.saveMemory()
+        # ctx.saveUsers()
         print('[processMemory] Stopped :\n\t- max memory size : ', maxNbMemory, '\n\t- max BGP ranking size : ',maxRankingBGPs ,'\n\t- max Queries ranking size : ',maxRankingQueries )
 
 #==================================================
 
-class SWEEP:  # Abstract Class
-    def __init__(self, gap, to, opt, mem = 100):
+class SWEEP(MsgProcessor):  # Abstract Class
+    def __init__(self, gap, to, opt, mem = 100, mode = 0):
+        super(SWEEP, self).__init__()
         #---
         assert isinstance(gap, dt.timedelta)
         #---
         self.gap = gap
         self.timeout = to
         self.optimistic = opt  # màj de la date du BGP avec le dernier TP reçu ?
-
+        self.nlast = mem
         self.lck = mp.Lock()
         self.manager = mp.Manager()
  
@@ -931,31 +1032,150 @@ class SWEEP:  # Abstract Class
 
         self.nbBGP = mp.Value('i', 0)
         self.nbREQ = mp.Value('i', 0)
+        self.nbEntries = mp.Value('i', 0)
+        self.nbQueries = mp.Value('i', 0)
+
+        self.entry_id = mp.Value('i', 0)
+
+        self.nbCancelledQueries = mp.Value('i', 0)
+        self.nbQBF = mp.Value('i', 0)
+        self.nbTO = mp.Value('i', 0)
+        self.nbEQ = mp.Value('i', 0)
+        self.nbOther = mp.Value('i', 0)
+        self.nbClientError = mp.Value('i', 0)
+
+        self.nbEmpty = mp.Value('i', 0)
 
         self.qId = mp.Value('i', 0)
+
         self.stat = self.manager.dict({'sumRecall': 0, 'sumPrecision': 0,
                                   'sumQuality': 0, 'nbQueries': 0, 'nbBGP': 0, 'sumSelectedBGP': 0})
 
-        self.dataQueue = mp.Queue()
         self.entryQueue = mp.Queue()
         self.validationQueue = mp.Queue()
 
         self.memoryInQueue = mp.Queue()
 
         self.parser = etree.XMLParser(recover=True, strip_cdata=True)
+        
+        self.qm = QueryManager(modeStat = False)
 
-        self.dataProcess = mp.Process(target=processAgregator, args=(
-            self.dataQueue, self.entryQueue, self))
-        self.entryProcess = mp.Process(target=processBGPDiscover, args=(
-            self.entryQueue, self.validationQueue, self))
-        self.validationProcess = mp.Process(
-            target=processValidation, args=(self.validationQueue, self.memoryInQueue, self))
+        self.dataProcess = mp.Process(target=processDataCollector, args=(self.entryQueue, self))
+        self.queryProcess = mp.Process(target=processQueryCollector, args=(self.validationQueue, self))
+        self.entryProcess = mp.Process(target=processBGPDiscover, args=(self.entryQueue, self.validationQueue, self))
+        self.validationProcess = mp.Process(target=processValidation, args=(self.validationQueue, self.memoryInQueue, self))
         self.memoryProcess = mp.Process(target=processMemory, args=(self, gap*3, self.memoryInQueue))
 
         self.dataProcess.start()
+        self.queryProcess.start()
         self.entryProcess.start()
         self.validationProcess.start()
         self.memoryProcess.start()
+
+        self.mode = mode
+        self.thread = None
+        self.mesg = None
+        if mode == 2 :
+            self.socketserver = SocketServer(port=5004, msgSize = 2048, ServerMsgProcessor = self )
+        else:
+            pass
+
+    def run(self):
+        self.socketserver.run()
+
+    def processIn(self,msg) :
+        req = json.loads(msg)
+
+        path = req['path']
+        print("[Dashboard]:",req)
+
+        if path =='/run':
+            rep = [self.nbBGP.value, self.nbREQ.value, self.stat['nbQueries'],  self.stat['sumPrecision'], self.stat['sumRecall']]
+
+        elif path == '/save' :
+            self.saveMemory()
+            self.saveUsers()
+            rep = True
+
+        elif path == '/sweep' :
+            (nbm, memory) = self.getMemory()
+            l = list()
+            for j in range(min(nbm,self.nlast)):
+                (i,idQ,queryCode, t,ip,query,bgp,precision,recall) = memory[nbm-j-1]
+                sbgp = []
+                if i==0:
+                    for (s,p,o) in [(tp.s,tp.p,tp.o) for tp in bgp.tp_set]: 
+                        sbgp.append( toStr(s,p,o)+' .' )
+                    l.append( (str(nbm-j), bgp.client, str(bgp.time), sbgp,'','', "No query assigned",None,None) )
+                else:
+                    if bgp is not None:
+                        for (s,p,o) in [(tp.s,tp.p,tp.o)  for tp in bgp.tp_set]: 
+                            sbgp.append( toStr(s,p,o)+' .' )
+                    else:
+                        sbgp.append(['No BGP assigned !'])
+                    l.append( (str(nbm-j), ip, str(t), sbgp, idQ, queryCode, query.strip(), precision, recall) )
+
+            rep = (self.stat['nbQueries'], self.stat['nbBGP'], self.gap.__str__(), self.nbQueries.value, self.nbEntries.value, str(self.nlast), l )
+
+        elif path == '/bestof-1' :
+            r = self.getRankingBGPs()
+            r.sort(key=itemgetter(2), reverse=True)
+            l = []
+            for (chgDate, bgp, freq, query, _, precision, recall) in r[:self.nlast] :
+                if query is None: query = ''
+                sbgp = []
+                for (s,p,o) in simplifyVars(bgp):
+                    sbgp.append( toStr(s,p,o)+' .' )
+
+                l.append( (sbgp, freq, query.strip())  )
+
+            rep = (str(self.memDuration), l )
+
+        elif path == '/bestof-2' :
+            r = self.getTopKBGP(self.nlast)
+            rep = []
+            for e in r:
+                (c, eVal) = e
+                l = []
+                for (s,p,o) in simplifyVars(eVal): 
+                    l.append( toStr(s,p,o)+' .' )
+                rep.append( (l, c.val) )
+
+        elif path == '/bestof-3' :
+            r = self.getRankingQueries()
+            r.sort(key=itemgetter(2), reverse=True)
+            l = []
+            for (chgDate, bgp, freq, query, _, precision, recall) in r[:self.nlast] :
+                if query is None: query = ''
+                sbgp = []
+                for (s,p,o) in simplifyVars(bgp):
+                    sbgp.append( toStr(s,p,o)+' .' )
+
+                l.append( (sbgp, freq, query.strip(), precision, recall)  )
+
+            rep = (str(self.memDuration), l )
+
+        elif path == '/bestof-4' :
+            r = self.getTopKQueries(self.nlast)
+            rep = []
+            for e in r:
+                (c, eVal) = e
+                l = []
+                for (s,p,o) in simplifyVars(eVal): 
+                    l.append( toStr(s,p,o)+' .' )
+                rep.append( (l, c.val) ) 
+
+        elif path == '/bestof-5' :
+            l = []
+            with self.lck:
+                for (ip,v) in sorted(self.usersMemory.items()) :
+                    (nb, sumPrecision, sumRecall) = v
+                    l.append( ( ip, nb, sumPrecision/nb, sumRecall/nb)  )
+            rep = l
+
+        else: rep = False
+
+        return json.dumps(rep)
 
 
     def setTimeout(self, to):
@@ -965,38 +1185,9 @@ class SWEEP:  # Abstract Class
     def swapOptimistic(self):
         self.optimistic = not(self.optimistic)
 
-    def put(self, v):
-        self.dataQueue.put(v)
-        # To implement
-
-    def putQuery(self, time, ip, query, bgp, queryID,queryCode):
-        with self.qId.get_lock():
-            self.qId.value += 1
-            qId = self.qId.value
-            if queryID is None:
-                queryID = 'id'+str(qId)
-        self.validationQueue.put(
-            (SWEEP_IN_QUERY, qId, (time, ip, query, bgp, queryID,queryCode)))
-
-    def putEnd(self, i):
-        self.dataQueue.put((i, SWEEP_IN_END, ()))
-
-    def putEntry(self, i, s, p, o, time, client):
-        self.dataQueue.put((i, SWEEP_IN_ENTRY, (s, p, o, time, client)))
-
-    def putData(self, i, xs, xp, xo):
-        self.dataQueue.put((i, SWEEP_IN_DATA, (xs, xp, xo)))
-
-    def putLog(self, entry_id, entry):
-        # (s,p,o,t,c,sm,pm,om) = entry
-        self.dataQueue.put((entry_id, SWEEP_IN_LOG, entry))
-
-    def delQuery(self, x):
-        self.validationQueue.put((SWEEP_OUT_QUERY, 0, x))
-
     def stop(self):
-        self.dataQueue.put(None)
-        self.dataProcess.join()
+        # self.dataProcess.join()
+        # self.queryProcess.join()
         self.entryProcess.join()
         self.validationProcess.join()
         self.memoryProcess.join()
@@ -1076,69 +1267,101 @@ class SWEEP:  # Abstract Class
                     s = dict({'ip':ip, 'precision':sumPrecision/nb,'recall':sumRecall/nb, 'nb':nb})
                     writer.writerow(s)
 
+
 #==================================================
 #==================================================
 #==================================================
 if __name__ == "__main__":
     print("main sweep")
-    gap = dt.timedelta(minutes=1)
+    # gap = dt.timedelta(minutes=1)
 
-    tpq1 = TriplePatternQuery(Variable('s'), URIRef('http://exemple.org/p1'), Literal('2'), now(
-    ), 'Client2', [URIRef('http://exemple.org/test1'), URIRef('http://exemple.org/test2')], [], [])
-    tpq1.renameVars(1)
-    print(tpq1.toString())
-    print(tpq1.shape())
-    print(tpq1.iriJoinable())
+    # tpq1 = TriplePatternQuery(Variable('s'), URIRef('http://exemple.org/p1'), Literal('2'), now(
+    # ), 'Client2', [URIRef('http://exemple.org/test1'), URIRef('http://exemple.org/test2')], [], [])
+    # tpq1.renameVars(1)
+    # print(tpq1.toString())
+    # print(tpq1.shape())
+    # print(tpq1.iriJoinable())
 
-    tpq2 = TriplePatternQuery(URIRef('http://exemple.org/test1'), URIRef(
-        'http://exemple.org/p2'), Literal('3'), now(), 'Client2', [], [], [])
-    tpq2.renameVars(2)
-    print(tpq2.toString())
-    print(tpq2.shape())
-    print(tpq2.iriJoinable())
+    # tpq2 = TriplePatternQuery(URIRef('http://exemple.org/test1'), URIRef(
+    #     'http://exemple.org/p2'), Literal('3'), now(), 'Client2', [], [], [])
+    # tpq2.renameVars(2)
+    # print(tpq2.toString())
+    # print(tpq2.shape())
+    # print(tpq2.iriJoinable())
 
-    tpq3 = TriplePatternQuery(URIRef('http://exemple.org/test2'), URIRef(
-        'http://exemple.org/p2'), Literal('4'), now(), 'Client2', [], [], [])
-    tpq3.renameVars(3)
-    print(tpq3.toString())
-    print(tpq3.shape())
-    print(tpq3.iriJoinable())
+    # tpq3 = TriplePatternQuery(URIRef('http://exemple.org/test2'), URIRef(
+    #     'http://exemple.org/p2'), Literal('4'), now(), 'Client2', [], [], [])
+    # tpq3.renameVars(3)
+    # print(tpq3.toString())
+    # print(tpq3.shape())
+    # print(tpq3.iriJoinable())
 
-    print('---')
+    # print('---')
 
-    print('\n Début')
-    bgp = BasicGraphPattern(gap, tpq1)
-    bgp.print()
+    # print('\n Début')
+    # bgp = BasicGraphPattern(gap, tpq1)
+    # bgp.print()
 
-    print('--- nestedLoopOf2')
-    print(tpq2.nestedLoopOf2(tpq1))
+    # print('--- nestedLoopOf2')
+    # print(tpq2.nestedLoopOf2(tpq1))
 
-    print('--- findNestedLoop')
-    (t, tp,fTp,mapVal) = bgp.findNestedLoop(tpq2)
-    if t:
-        print(mapVal)
-        print(fTp.toString())
-        print(tp.toString())
+    # print('--- findNestedLoop')
+    # (t, tp,fTp,mapVal) = bgp.findNestedLoop(tpq2)
+    # if t:
+    #     print(mapVal)
+    #     print(fTp.toString())
+    #     print(tp.toString())
 
-    print('---')
+    # print('---')
 
 
-    tpq4 = TriplePatternQuery(URIRef('http://exemple.org/test2'), URIRef(
-        'http://exemple.org/p2'), Variable('o'), now(), 'Client2', [], [], ['a','b'])
-    tpq4.renameVars(4)
-    print(tpq4.toString())
-    print(tpq4.shape())
-    print(tpq4.iriJoinable())
+    # tpq4 = TriplePatternQuery(URIRef('http://exemple.org/test2'), URIRef(
+    #     'http://exemple.org/p2'), Variable('o'), now(), 'Client2', [], [], ['a','b'])
+    # tpq4.renameVars(4)
+    # print(tpq4.toString())
+    # print(tpq4.shape())
+    # print(tpq4.iriJoinable())
 
-    bgp = BasicGraphPattern(gap, tpq4)
-    bgp.print()
+    # bgp = BasicGraphPattern(gap, tpq4)
+    # bgp.print()
 
-    tpq5 = TriplePatternQuery(URIRef('http://exemple.org/test1'), Variable('p'), Variable('o'), now(), 'Client2', [], ['p'], ['c','d'])
-    tpq5.renameVars(5)
-    print(tpq5.toString())
-    print(tpq5.shape())
-    print(tpq5.iriJoinable())
+    # tpq5 = TriplePatternQuery(URIRef('http://exemple.org/test1'), Variable('p'), Variable('o'), now(), 'Client2', [], ['p'], ['c','d'])
+    # tpq5.renameVars(5)
+    # print(tpq5.toString())
+    # print(tpq5.shape())
+    # print(tpq5.iriJoinable())
 
-    print(bgp.findIRIJoin(tpq5))
+    # print(bgp.findIRIJoin(tpq5))
 
-    print('Fin')
+    # print('Fin')
+
+    cfg = ConfigParser(interpolation=ExtendedInterpolation())
+    r = cfg.read('./mac-config-work.cfg')
+    if r == [] :
+        print('Config file unkown')
+        exit()
+    print(cfg.sections())
+    sweepCfg = cfg['SWEEP-WS']
+    agap = float(sweepCfg['Gap'])
+    atimeout = float(sweepCfg['TimeOut'])
+    aOptimistic = sweepCfg.getboolean('Optimistic')
+    aurl = sweepCfg['LocalAddr']
+    purl = urlparse(aurl)
+    ahost = purl.hostname
+    aport = purl.port
+    anlast = int(sweepCfg['BGP2View'])
+
+    if atimeout == 0:
+        to = agap
+    else:
+        to = atimeout
+    try :
+        print('Starting SWEEP')
+        ctx = SWEEP(dt.timedelta(minutes= agap),dt.timedelta(minutes= to),aOptimistic,anlast,mode=2)
+        ctx.run()
+    except KeyboardInterrupt:
+        pass
+    finally :
+        print('Stopping SWEEP')
+        ctx.stop()
+        print('SWEEP Stopped')

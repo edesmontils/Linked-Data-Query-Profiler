@@ -234,7 +234,7 @@ class TPFEP(Endpoint):
             # 'run' n'existe que depuis python 3.5 !!! donc pas en 3.2 !!!!
             # print('Execute:',self.appli,self.service+'/'+self.dataset, self.clientParams,params,qstr)
 
-            commande = [self.appli, self.service+'/'+self.dataset] + self.clientParams  + [qstr]  + params
+            commande = [self.appli, self.service+'/'+self.dataset] + self.clientParams  + params  + ['-q '+qstr]
 
             ret = subprocess.run(commande, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)
 
