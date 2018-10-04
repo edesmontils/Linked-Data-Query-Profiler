@@ -38,6 +38,8 @@ import requests as http
 from urllib.parse import urlparse, quote_plus
 from configparser import ConfigParser, ExtendedInterpolation
 
+from tools.Socket import SocketClient, MsgProcessor
+
 from scipy.stats import uniform
 
 import os.path
@@ -49,7 +51,8 @@ class Context(object):
 
     def __init__(self):
         super(Context, self).__init__()
-        self.sweep = 'http://127.0.0.1:5002'
+        self.sweep_ip = '127.0.0.1'
+        self.sweep_port = 5002
         self.tpfc = TPFEP(service='http://localhost:5000/lift')
         self.tpfc.setEngine(
             '/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client')
@@ -66,13 +69,10 @@ class Context(object):
         self.doPR = False
         self.lastProcessing = dt.timedelta() #-1
         self.gap = 60
-        self.addr = ''
-        self.addr_ext = ''
-        # self.BGPRefList = dict()
-        # self.BGPNb = 0
 
-    def setLDQPServer(self, host):
-        self.sweep = host
+    def setSWEEPServer(self, host, port):
+        self.sweep_ip = host
+        self.sweep_port = port
 
     def setTPFClient(self, tpfc):
         self.tpfc = tpfc
@@ -268,7 +268,6 @@ def run(inq, outq, ctx, datasource):
     qm = ctx.qm
     doPR = ctx.doPR
     gap = ctx.gap
-    sweep = ctx.sweep
 
     mss = inq.get()
 
@@ -304,14 +303,6 @@ def run(inq, outq, ctx, datasource):
 
                     # mess = '<query time="'+date2str(dt.datetime.now())+'" no="'+no+'"><![CDATA['+query+']]></query>'
                     mess = '#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+ip+'@'+date2str(oldDate)+'\n'+query
-                    if doPR:
-                        url = ctx.sweep+'/query'
-                        print('on:',url)
-                        # try:
-                        #     s = http.post(url,data={'data':mess, 'no':no, 'bgp_list': '<l>'+bgp_list+'</l>'})
-                        #     print('(%d)'%nbe,'Request posted : ',s.json()['result'])
-                        # except Exception as e:
-                        #     print('Exception',e)
 
                     before = now()
                     rep = sp.query(mess)
@@ -327,8 +318,9 @@ def run(inq, outq, ctx, datasource):
                     if rep == []:
                         messEmpty = " Empty query !!! "+messTO
                         print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),messEmpty)
-                        url = sweep+'/inform'
-                        s = http.post(url,data={'data':mess,'errtype':'Empty', 'no':no})
+                        client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
+                        data={'path': 'inform' ,'data': mess, 'errtype': 'Empty', 'no': no}
+                        client.sendMsg2(data)
                         outq.put( (nbe, noq, processing, "Empty Query"+code,valid)  )
                     else: 
                         messOk = ': [...] '+ messTO
@@ -339,18 +331,20 @@ def run(inq, outq, ctx, datasource):
                 except TPFClientError as e :
                     print('(%d)'%nbe,'Exception TPFClientError (%d) : %s'%(i+1,e.__str__()))
                     if doPR:
-                        url = sweep+'/inform'
-                        s = http.post(url,data={'data':mess,'errtype':'CltErr', 'no':no})
-                        print('(%d)'%nbe,'Request cancelled : ',s.json()['result']) 
+                        client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
+                        data={'path': 'inform' ,'data': mess, 'errtype': 'CltErr', 'no': no}
+                        client.sendMsg2(data)
+                        print('(%d)'%nbe,'Request cancelled : ') 
                     if i>TPF_CLIENT_REDO/2:
                         time.sleep(TPF_CLIENT_TEMPO)
 
                 except TimeOut as e :
                     print('(%d)'%nbe,'Timeout (%d) :'%(i+1),e)
                     if doPR:
-                        url = sweep+'/inform'
-                        s = http.post(url,data={'data':mess,'errtype':'TO', 'no':no})
-                        print('(%d)'%nbe,'Request cancelled : ',s.json()['result'])  
+                        client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
+                        data={'path': 'inform' ,'data': mess, 'errtype': 'TO', 'no': no}
+                        client.sendMsg2(data)
+                        print('(%d)'%nbe,'Request cancelled : ')  
                     if i>TPF_CLIENT_REDO/2:
                         time.sleep(TPF_CLIENT_TEMPO)
 
@@ -359,25 +353,59 @@ def run(inq, outq, ctx, datasource):
             print('(%d)'%nbe,'Query Bad Formed :',e)
             outq.put( (nbe, noq, processing, "QBFTPF",valid)  )
             if doPR:
-                url = sweep+'/inform'
-                s = http.post(url,data={'data':mess,'errtype':'QBF', 'no':no})
-                print('(%d)'%nbe,'Request cancelled : ',s.json()['result']) 
+                client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'QBF', 'no': no}
+                client.sendMsg2(data)                
+                print('(%d)'%nbe,'Request cancelled : ') 
         except EndpointException as e:
             print('(%d)'%nbe,'Endpoint Exception :',e)
             if doPR:
-                url = sweep+'/inform'
-                s = http.post(url,data={'data':mess,'errtype':'EQ', 'no':no})
-                print('(%d)'%nbe,'Request cancelled : ',s.json()['result']) 
+                client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'EQ', 'no': no}
+                client.sendMsg2(data)                                
+                print('(%d)'%nbe,'Request cancelled : ') 
         except Exception as e:
             print('(%d)'%nbe,'Exception execution query... :',e)
             if doPR:
-                url = sweep+'/inform'
-                s = http.post(url,data={'data':mess,'errtype':'Other', 'no':no})
-                print('(%d)'%nbe,'Request cancelled : ',s.json()['result'])
+                client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
+                data={'path': 'inform' ,'data': mess, 'errtype': 'Other', 'no': no}
+                client.sendMsg2(data)                
+                print('(%d)'%nbe,'Request cancelled : ')
 
         mss = inq.get()
 
     outq.put(None)
+
+
+def loadDatabases(configFile, atpfServer, atpfClient) :
+    XMLparser = etree.XMLParser(recover=True, strip_cdata=True)
+    ctx.tree = etree.parse(configFile, XMLparser)
+    #---
+    dtd = etree.DTD('config.dtd')
+    assert dtd.validate(ctx.tree), '%s non valide au chargement : %s' % (
+        configFile, dtd.error_log.filter_from_errors()[0])
+    #---
+    lb = ctx.tree.getroot().findall('listeBases/base_de_donnee')
+    for l in lb:
+        f = l.find('fichier')
+        ref = l.find('référence')
+        if ref.text is None:
+            ref.text = ''
+        print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
+        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s xxxxx'])
+        sp.setEngine(atpfClient)
+        #if ato: sp.setTimeout(ato)
+        ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
+                                        'description': etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
+                                        'tables': []}
+        ctx.listeSP[l.get('nom')] = sp
+    ctx.listeNoms = list(ctx.listeBases.keys())
+    ctx.version = ctx.tree.getroot().get('version')
+    ctx.name = ctx.tree.getroot().get('name')
+    if ctx.tree.getroot().get('debug') == 'false':
+        ctx.debug = False
+    else:
+        ctx.debug = True
 
 #==================================================
 #==================================================
@@ -386,16 +414,6 @@ def run(inq, outq, ctx, datasource):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Linked Data Query simulator (for a modified TPF server)')
     parser.add_argument('files', metavar='file', nargs='+', help='files to analyse')
-
-
-    parser.add_argument("--sweep", default=SWEEP_SERVEUR, dest="sweep",help="SWEEP ('"+str(SWEEP_SERVEUR)+"' by default)")
-    parser.add_argument("-s", "--server", default=TPF_SERVEUR,dest="tpfServer", help="TPF Server ('"+TPF_SERVEUR+"' by default)")
-    parser.add_argument("-c", "--client", default=TPF_CLIENT,dest="tpfClient", help="TPF Client ('...' by default)")
-    parser.add_argument("-v", "--valid", dest="valid",action="store_true", help="Do precision/recall")
-    parser.add_argument("-g", "--gap", type=float, default=60,dest="gap", help="Gap in minutes (60 by default)")
-    parser.add_argument("-to", "--timeout", type=float, default=None, dest="timeout",help="TPF Client Time Out in minutes (no timeout by default).")
-    parser.add_argument("--host", default="127.0.0.1",dest="host", help="host ('127.0.0.1' by default)")
-    parser.add_argument("--port", type=int, default=5002,dest="port", help="Port (5002 by default)")
 
     parser.add_argument("-f", "--config", default='',dest="cfg", help="Config file")
 
@@ -413,78 +431,41 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     if (args.cfg == ''):
-        asweep = args.sweep
-        atpfServer = args.tpfServer
-        atpfClient = args.tpfClient
-        ahost = args.host
-        aport = args.port
-        agap = args.gap
-        avalid = args.valid
-        ato = args.timeout
-        aurl = 'http://'+ahost+":"+str(aport)
-        aurl_ext = aurl
-    else:
-        cfg = ConfigParser(interpolation=ExtendedInterpolation())
-        r = cfg.read(args.cfg)
-        if r == []:
-            print('Config file unkown')
-            exit()
-        print(cfg.sections())
-        qsimCfg = cfg['QSIM-WS']
-        asweep = qsimCfg['SWEEP']
-        atpfServer = qsimCfg['TPFServer']
-        atpfClient = qsimCfg['TPFClient']
-        agap = float(qsimCfg['Gap'])
-        avalid = qsimCfg.getboolean('Precision-Recall')
-        ato = float(qsimCfg['TimeOut'])
-        aurl = qsimCfg['LocalAddr']
-        purl = urlparse(aurl)
-        ahost = purl.hostname
-        aport = purl.port
-        aurl_ext = qsimCfg['ExternalAddr']
+        pass
 
-    ctx.setLDQPServer(asweep)
+    cfg = ConfigParser(interpolation=ExtendedInterpolation())
+    r = cfg.read(args.cfg)
+    if r == []:
+        print('Config file unkown')
+        exit()
+    print(cfg.sections())
+    qsimCfg = cfg['QSIM-WS']
+    atpfServer = qsimCfg['TPFServer']
+    atpfClient = qsimCfg['TPFClient']
+    agap = float(qsimCfg['Gap'])
+    avalid = qsimCfg.getboolean('Precision-Recall')
+    ato = float(qsimCfg['TimeOut'])
+    ahost = qsimCfg['LocalIP']
+    aport = qsimCfg['QSIM']
+
+    sweepCfg = cfg['SWEEP']
+    asweep = sweepCfg['LocalIP']
+    ctx.ports = { 'DataCollector' : int(sweepCfg['DataCollector']), 'QueryCollector' : int(sweepCfg['QueryCollector']), 'DashboardEntry' : int(sweepCfg['DashboardEntry']) }
+    ctx.sweep_host = sweepCfg['LocalIP']
+
+    ctx.setSWEEPServer(ctx.sweep_host,ctx.ports['QueryCollector'])
     # http://localhost:5000/lift : serveur TPF LIFT (exemple du papier)
     # http://localhost:5001/dbpedia_3_9 server dppedia si : ssh -L 5001:172.16.9.3:5001 desmontils@172.16.9.15
     ctx.gap = dt.timedelta(minutes=agap)
-    XMLparser = etree.XMLParser(recover=True, strip_cdata=True)
-    configFile = 'config.xml'
-    ctx.tree = etree.parse(configFile, XMLparser)
-    #---
-    dtd = etree.DTD('config.dtd')
-    assert dtd.validate(ctx.tree), '%s non valide au chargement : %s' % (
-        configFile, dtd.error_log.filter_from_errors()[0])
-    #---
-    lb = ctx.tree.getroot().findall('listeBases/base_de_donnee')
-    for l in lb:
-        f = l.find('fichier')
-        ref = l.find('référence')
-        if ref.text is None:
-            ref.text = ''
-        print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s %s' % asweep])
-        sp.setEngine(atpfClient)
-        #if ato: sp.setTimeout(ato)
-        ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
-                                        'description': etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
-                                        'tables': []}
-        ctx.listeSP[l.get('nom')] = sp
-    ctx.listeNoms = list(ctx.listeBases.keys())
-    ctx.version = ctx.tree.getroot().get('version')
-    ctx.name = ctx.tree.getroot().get('name')
-    if ctx.tree.getroot().get('debug') == 'false':
-        ctx.debug = False
-    else:
-        ctx.debug = True
+
+    loadDatabases('config.xml', atpfServer, atpfClient)
+
     if avalid:
         ctx.doPR = True
     try:
-        ctx.addr = aurl
-        ctx.addr_ext = aurl_ext
-        print('Running qsim ')
 
+        print('Running qsim on ', ahost+':'+aport)
         print('Start simulating with %d processes'%args.nb_processes)
-
 
         file_set = args.files
         nb_users = 0
@@ -539,13 +520,3 @@ if __name__ == '__main__':
         if nb>0 :
             print('Avg processing: ',sumT/nb)
         print('Queries out of gap: ',pbGap)
-
-
-
-
-
-
-
-
-
-

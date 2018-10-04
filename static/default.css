@@ -73,7 +73,7 @@ a:hover {
 /* Header */
 
 #header {
-	width: 230px;
+	width: 400px;
 	height: 90px;
 	padding: 70px 0 0 30px;
 	background: #FFFFFF /*url(images/img2.jpg) no-repeat*/;
@@ -101,7 +101,7 @@ float: left;
 position: absolute;
 left: 270px;
 top: 0;
-width: 500px;
+width: 700px;
 margin: 50px auto;
 text-align: center;
 }

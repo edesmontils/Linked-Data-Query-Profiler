@@ -236,7 +236,7 @@ class SocketClient(Socket) :
                 (self.processor.cl_ip,self.processor.cl_port) = (self.cl_ip, self.cl_port)
                 (self.processor.loc_ip,self.processor.loc_port) = (self.loc_ip,self.loc_port)
         except socket.error:
-            print ("La connexion a échoué.")
+            print ("La connexion a échoué (%s)."%(self.loc_ip+':'+str(self.loc_port)))
             sys.exit()
         print ("Connexion établie avec le serveur (%s)."%(self.cl_ip+':'+str(self.cl_port)))
 

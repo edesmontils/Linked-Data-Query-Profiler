@@ -19,7 +19,7 @@ window.onbeforeunload = function (evt) {
 
 monitor = new Ajax.PeriodicalUpdater('get','/sweep', {
     method: 'get',
-    frequency: 2,
+    frequency: 2.5,
     decay: 1.1,
     onSuccess: function (trs) {
             bo = trs.responseText
@@ -31,7 +31,7 @@ monitor.stop();
 
 monitor2 = new Ajax.PeriodicalUpdater('get','/run', {
     method: 'get',
-    frequency: 1,
+    frequency: 2,
     onSuccess: function (trs) {
             liste = JSON.parse(trs.responseText).result;
             nbBGP = liste[0];
@@ -47,14 +47,16 @@ monitor2 = new Ajax.PeriodicalUpdater('get','/run', {
 
 monitor3 = new Ajax.PeriodicalUpdater('get','/pr', {
     method: 'get',
-    frequency: 1,
+    frequency: 2,
     onSuccess: function (trs) {
             liste = JSON.parse(trs.responseText).result;
             pre = Math.round(liste[0]*100);
             rec = Math.round(liste[1]*100);
+            gn = Math.round(liste[2]*100);
             //alert(nbBGP);
             gPRE.refresh(pre);
             gREC.refresh(rec);
+            gGN.refresh(gn);
     },
     onFailure: function() {'<p>SWEEP HS</p>' }
     });
@@ -125,6 +127,23 @@ function init() {
         min: 0,
         max: 100,
         title: 'Avg Recall',
+        gaugeWidthScale: 0.6,
+        levelColors: [
+                        "#cd0000",
+                        "#0066cc",
+                        "#006400"
+                      ] ,
+        counter: true,
+        symbol: '%',
+        pointer: true,
+        humanFriendly: true      });
+
+    gGN = new JustGage({
+        id: 'gaugeGN',
+        value: 0,
+        min: 0,
+        max: 100,
+        title: 'Golden Number',
         gaugeWidthScale: 0.6,
         levelColors: [
                         "#cd0000",

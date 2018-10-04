@@ -27,7 +27,7 @@ select * where{
       </tp>
     </bgp>
   </entry>
-  <entry datetime="2017-05-18 12:00:20.861000+00:00" logline="03" valid="TPF">
+  <entry datetime="2017-05-18 12:00:22.861000+00:00" logline="03" valid="TPF">
     <request><![CDATA[
 select * where{ 
 ?s <http://www.example.org/lift2#p2> "toto" .
@@ -47,7 +47,7 @@ select * where{
       </tp>
     </bgp>
   </entry>
-  <entry datetime="2017-05-18 12:00:20.863000+00:00" logline="04" valid="TPF">
+  <entry datetime="2017-05-18 12:00:24.863000+00:00" logline="04" valid="TPF">
     <request><![CDATA[
 select * where{ 
 ?s <http://www.example.org/lift2#p1> ?o .
@@ -61,7 +61,7 @@ select * where{
       </tp>
     </bgp>
   </entry>
-  <entry datetime="2017-05-18 12:00:20.870000+00:00" logline="05" valid="TPF">
+  <entry datetime="2017-05-18 12:00:26.870000+00:00" logline="05" valid="TPF">
     <request><![CDATA[
 select * where{ 
 ?s <http://www.example.org/lift2#p1> ?o .
@@ -75,7 +75,7 @@ select * where{
       </tp>
     </bgp>
   </entry>
-  <entry datetime="2017-05-18 12:00:20.872000+00:00" logline="06" valid="TPF">
+  <entry datetime="2017-05-18 12:00:28.872000+00:00" logline="06" valid="TPF">
     <request><![CDATA[
 select * where{ 
 ?s <http://www.example.org/lift2#p4> "tata" .
@@ -86,6 +86,27 @@ select * where{
         <s type="var" val="s"/>
         <p type="iri" val="http://www.example.org/lift2#p4"/>
         <o type="lit">tata</o>
+      </tp>
+    </bgp>
+  </entry>
+  <entry datetime="2017-05-18 12:00:30.872000+00:00" logline="07" valid="TPF">
+    <request><![CDATA[
+prefix : <http://www.example.org/lift2#>
+select * where{ 
+:c1 :p1 ?x .
+:c1 :p2 ?y .
+}
+]]></request>
+    <bgp>
+      <tp>
+        <s type="iri" val="http://www.example.org/lift2#c1"/>
+        <p type="iri" val="http://www.example.org/lift2#p1"/>
+        <o type="var" val="x"/>
+      </tp>
+      <tp>
+        <s type="iri" val="http://www.example.org/lift2#c1"/>
+        <p type="iri" val="http://www.example.org/lift2#p2"/>
+        <o type="var" val="y"/>
       </tp>
     </bgp>
   </entry>

@@ -35,6 +35,7 @@ from functools import reduce
 import json
 
 from tools.Socket import SocketServer, MsgProcessor
+import argparse
 
 from configparser import ConfigParser, ExtendedInterpolation
 from urllib.parse import urlparse, unquote_plus
@@ -413,7 +414,7 @@ class DataCollectorMsgProcessor(MsgProcessor):
 
 def processDataCollector(out_queue, ctx):
     print('[processDataCollector] Started ')
-    server = SocketServer(port=5005,ServerMsgProcessor = DataCollectorMsgProcessor(out_queue,ctx) )
+    server = SocketServer(port=ctx.ports['DataCollector'],ServerMsgProcessor = DataCollectorMsgProcessor(out_queue,ctx) )
     server.run2()
     out_queue.put(None)
     print('[processDataCollector] Stopped')
@@ -520,41 +521,41 @@ class QueryCollectorMsgProcessor(MsgProcessor):
                 print('[QueryCollector] ','(%s)'%queryNb,'Query Bad Formed :',inQuery['data'])
                 # self.ctx.delQuery(queryNb)
                 self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
-                self.ctx.nbCancelledQueries += 1
-                self.ctx.nbQBF += 1
+                self.ctx.nbCancelledQueries.value += 1
+                self.ctx.nbQBF.value += 1
             elif errtype == 'TO':
                 print('[QueryCollector] ','(%s)'%queryNb,'Time Out :',inQuery['data'])
                 # self.ctx.delQuery(queryNb)
                 self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
-                self.ctx.nbCancelledQueries += 1
-                self.ctx.nbTO += 1
+                self.ctx.nbCancelledQueries.value += 1
+                self.ctx.nbTO.value += 1
             elif errtype == 'CltErr':
                 print('[QueryCollector] ','(%s)'%queryNb,'TPF Client Error for :',inQuery['data'])
                 # self.ctx.delQuery(queryNb)
                 self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
-                self.ctx.nbCancelledQueries += 1
-                self.ctx.nbClientError += 1
+                self.ctx.nbCancelledQueries.value += 1
+                self.ctx.nbClientError.value += 1
             elif errtype == 'EQ':
                 print('[QueryCollector] ','(%s)'%queryNb,'Error Query for :',inQuery['data'])
                 # self.ctx.delQuery(queryNb)
                 self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
-                self.ctx.nbCancelledQueries += 1
-                self.ctx.nbEQ += 1
+                self.ctx.nbCancelledQueries.value += 1
+                self.ctx.nbEQ.value += 1
             elif errtype == 'Other':
                 print('[QueryCollector] ','(%s)'%queryNb,'Unknown Pb for query :',inQuery['data'])
                 # self.ctx.delQuery(queryNb)
                 self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
-                self.ctx.nbCancelledQueries += 1
-                self.ctx.nbOther += 1
+                self.ctx.nbCancelledQueries.value += 1
+                self.ctx.nbOther.value += 1
             elif errtype == 'Empty':
                 print('[QueryCollector] ','(%s)'%queryNb,'Empty for :',inQuery['data'])
-                self.ctx.nbEmpty += 1
+                self.ctx.nbEmpty.value += 1
             else:
                 print('[QueryCollector] ','(%s)'%queryNb,'Unknown Pb for query :',inQuery['data'])
                 # self.ctx.delQuery(queryNb)
                 self.out_queue.put((SWEEP_OUT_QUERY, 0, queryNb))
-                self.ctx.nbCancelledQueries += 1
-                self.ctx.nbOther += 1
+                self.ctx.nbCancelledQueries.value += 1
+                self.ctx.nbOther.value += 1
 
         else :
             pass
@@ -562,7 +563,7 @@ class QueryCollectorMsgProcessor(MsgProcessor):
         
 def processQueryCollector(out_queue, ctx):
     print('[processQueryCollector] Started ')
-    server = SocketServer(port=5003,ServerMsgProcessor = QueryCollectorMsgProcessor(out_queue,ctx) )
+    server = SocketServer(port=ctx.ports['QueryCollector'],ServerMsgProcessor = QueryCollectorMsgProcessor(out_queue,ctx) )
     server.run2()
     out_queue.put(None)
     print('[processQueryCollector] Stopped')
@@ -602,8 +603,7 @@ def processBGPDiscover(in_queue, val_queue, ctx):
                     for (i, bgp) in enumerate(BGP_list):
 
                         if SWEEP_DEBUG_BGP_BUILD:
-                            print(
-                                '-----------------------------------\n\t Etude avec BGP ', i)
+                            print('-----------------------------------\n\t Etude avec BGP ', i)
                             bgp.print('\t\t\t')
 
                         if bgp.canBeCandidate(new_tpq):
@@ -764,12 +764,14 @@ def processValidation(in_queue, memoryQueue, ctx):
                 (precision, recall, bgp) = (0, 0, None)
                 queryList[id] = ((time, ip, query, qbgp, queryID,queryCode), bgp, precision, recall)
                 # print('[processValidation] Query added')
+                ctx.stat['goldenNumber'] += len(qbgp)
 
             elif mode == SWEEP_IN_BGP:
                 bgp = val
                 # print('[processValidation] BGP Analysis')
                 if bgp is not None: # HEURISTIQUE : Un BGP qui contient un simple triplet n'est pas valide
-                    if (len(bgp.input_set) ==1) and bgp.tp_set[0].isTriple() :
+                    ctx.stat['genBGP'] += 1
+                    if (len(bgp.input_set) ==1) and bgp.tp_set[0].isTriple() and false :
                         # print("=================>     BGP not inserted")
                         # bgp.print()
                         pass
@@ -813,6 +815,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                             if SWEEP_DEBUB_PR:
                                 print('-')
                                 print('No BGP to extract')
+                        ctx.stat['goldenNumber'] -= len(qbgp)
                         break
                 # print('[processValidation] Query deleted')
 
@@ -1006,7 +1009,7 @@ def processMemory(ctx, duration, inQueue):
 #==================================================
 
 class SWEEP(MsgProcessor):  # Abstract Class
-    def __init__(self, gap, to, opt, mem = 100, mode = 0):
+    def __init__(self, gap, to, opt, ports, mem = 100, mode = 0):
         super(SWEEP, self).__init__()
         #---
         assert isinstance(gap, dt.timedelta)
@@ -1017,6 +1020,7 @@ class SWEEP(MsgProcessor):  # Abstract Class
         self.nlast = mem
         self.lck = mp.Lock()
         self.manager = mp.Manager()
+        self.ports = ports
  
         self.memory = self.manager.list()
         self.lastTimeMemorySaved = now()
@@ -1048,7 +1052,7 @@ class SWEEP(MsgProcessor):  # Abstract Class
 
         self.qId = mp.Value('i', 0)
 
-        self.stat = self.manager.dict({'sumRecall': 0, 'sumPrecision': 0,
+        self.stat = self.manager.dict({'sumRecall': 0, 'sumPrecision': 0, 'goldenNumber':0, 'genBGP':0,
                                   'sumQuality': 0, 'nbQueries': 0, 'nbBGP': 0, 'sumSelectedBGP': 0})
 
         self.entryQueue = mp.Queue()
@@ -1076,7 +1080,7 @@ class SWEEP(MsgProcessor):  # Abstract Class
         self.thread = None
         self.mesg = None
         if mode == 2 :
-            self.socketserver = SocketServer(port=5004, msgSize = 2048, ServerMsgProcessor = self )
+            self.socketserver = SocketServer(port=self.ports['DashboardEntry'], msgSize = 2048, ServerMsgProcessor = self )
         else:
             pass
 
@@ -1090,7 +1094,7 @@ class SWEEP(MsgProcessor):  # Abstract Class
         print("[Dashboard]:",req)
 
         if path =='/run':
-            rep = [self.nbBGP.value, self.nbREQ.value, self.stat['nbQueries'],  self.stat['sumPrecision'], self.stat['sumRecall']]
+            rep = [self.nbBGP.value, self.nbREQ.value, self.stat['nbQueries'],  self.stat['sumPrecision'], self.stat['sumRecall'], self.stat['goldenNumber'], self.stat['genBGP']]
 
         elif path == '/save' :
             self.saveMemory()
@@ -1334,30 +1338,30 @@ if __name__ == "__main__":
     # print(bgp.findIRIJoin(tpq5))
 
     # print('Fin')
+    parser = argparse.ArgumentParser(description='SWEEP')
+    parser.add_argument("-f", "--config", default='', dest="cfg", help="Config file")
+    args = parser.parse_args()
 
     cfg = ConfigParser(interpolation=ExtendedInterpolation())
-    r = cfg.read('./mac-config-work.cfg')
+    r = cfg.read(args.cfg)
+
     if r == [] :
         print('Config file unkown')
         exit()
     print(cfg.sections())
-    sweepCfg = cfg['SWEEP-WS']
+    sweepCfg = cfg['SWEEP']
     agap = float(sweepCfg['Gap'])
     atimeout = float(sweepCfg['TimeOut'])
     aOptimistic = sweepCfg.getboolean('Optimistic')
-    aurl = sweepCfg['LocalAddr']
-    purl = urlparse(aurl)
-    ahost = purl.hostname
-    aport = purl.port
     anlast = int(sweepCfg['BGP2View'])
-
+    aports = { 'DataCollector' : int(sweepCfg['DataCollector']), 'QueryCollector' : int(sweepCfg['QueryCollector']), 'DashboardEntry' : int(sweepCfg['DashboardEntry']) }
     if atimeout == 0:
         to = agap
     else:
         to = atimeout
     try :
         print('Starting SWEEP')
-        ctx = SWEEP(dt.timedelta(minutes= agap),dt.timedelta(minutes= to),aOptimistic,anlast,mode=2)
+        ctx = SWEEP(dt.timedelta(minutes= agap),dt.timedelta(minutes= to),aOptimistic, aports,anlast,mode=2)
         ctx.run()
     except KeyboardInterrupt:
         pass
