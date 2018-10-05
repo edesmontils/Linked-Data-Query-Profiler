@@ -56,7 +56,7 @@ class QueryCollectorMsgProcessor(MsgProcessor):
     def processIn(self,mesg) :
         inQuery = json.loads(mesg)
         path = inQuery['path']
-        print('[QueryCollector] %s '%path)
+        # print('[QueryCollector] %s '%path)
         try: 
 
             if path == "inform" :
@@ -601,7 +601,41 @@ if __name__ == '__main__':
         if nb>0 :
             print('Avg processing: ',sumT/nb)
         print('Queries out of gap: ',pbGap)
+
+
+        sweep = SocketClient(host=ctx.sweep_ip, port=ctx.ports['DashboardEntry'], msgSize = 2048, ClientMsgProcessor = MsgProcessor() )
+        res = sweep.sendMsg( { 'path' : '/run'} )
+        nb = res[2]
+        if nb>0:
+            avgPrecision = res[3]/nb
+            avgRecall = res[4]/nb
+        else:
+            avgPrecision = 0
+            avgRecall = 0
+        if (res[6]+res[0])>0:
+            gn = res[5]/(res[6]+res[0])
+        else: gn = 0
+        print('server stat :')
+        print('\t - Nb Queries :', nb)
+        print('\t - Nb BGP : ', res[7])
+        print('\t - Nb TPQ : ', res[9])
+        print('\t - Avg p : ',avgPrecision)
+        print('\t - Avg r : ',avgRecall)
+        print('\t - GN : ',gn)
         ctx.stop()
+        print('Process data :')
+        nb = 0
+        sump = 0
+        sumr = 0
         for (id,t) in ctx.queryFeedback.items() :
-            print(id,':',t)
+            print('\t * ',id,':',t)
+            nb +=1
+            sump += t['p']
+            sumr += t['r']
+        print('Process stat :')
+        if nb>0:
+            print('\t - nb queries : ',nb)
+            print('\t - Avg p : ', sump/nb)
+            print('\t - Avg r : ',sumr/nb)
+        else: print('\t no queries treated')
         print('The End!')

@@ -1118,7 +1118,7 @@ class SWEEP(MsgProcessor):  # Abstract Class
         print("[Dashboard]:",req)
 
         if path =='/run':
-            rep = [self.nbBGP.value, self.nbREQ.value, self.stat['nbQueries'],  self.stat['sumPrecision'], self.stat['sumRecall'], self.stat['goldenNumber'], self.stat['genBGP']]
+            rep = [self.nbBGP.value, self.nbREQ.value, self.stat['nbQueries'],  self.stat['sumPrecision'], self.stat['sumRecall'], self.stat['goldenNumber'], self.stat['genBGP'], self.stat['nbBGP'], self.nbQueries.value, self.nbEntries.value]
 
         elif path == '/save' :
             self.saveMemory()
