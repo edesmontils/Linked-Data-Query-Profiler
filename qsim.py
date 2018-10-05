@@ -598,10 +598,26 @@ if __name__ == '__main__':
         pass
     finally:
         print('\n\n To conclude :')
-        if nb>0 :
-            print('Avg processing: ',sumT/nb)
-        print('Queries out of gap: ',pbGap)
 
+
+        ctx.stop()
+        print('Process data :')
+        nb = 0
+        sump = 0
+        sumr = 0
+        for (id,t) in ctx.queryFeedback.items() :
+            print('\t * ',id,':',t)
+            nb +=1
+            sump += t['p']
+            sumr += t['r']
+        print('Process stat :')
+        print('\t - Queries out of gap: ',pbGap)
+        if nb>0 :
+            print('\t - Avg processing: ',sumT/nb)
+            print('\t - nb queries : ',nb)
+            print('\t - Avg p : ', sump/nb)
+            print('\t - Avg r : ',sumr/nb)
+        else: print('\t no queries treated')
 
         sweep = SocketClient(host=ctx.sweep_ip, port=ctx.ports['DashboardEntry'], msgSize = 2048, ClientMsgProcessor = MsgProcessor() )
         res = sweep.sendMsg( { 'path' : '/run'} )
@@ -622,20 +638,5 @@ if __name__ == '__main__':
         print('\t - Avg p : ',avgPrecision)
         print('\t - Avg r : ',avgRecall)
         print('\t - GN : ',gn)
-        ctx.stop()
-        print('Process data :')
-        nb = 0
-        sump = 0
-        sumr = 0
-        for (id,t) in ctx.queryFeedback.items() :
-            print('\t * ',id,':',t)
-            nb +=1
-            sump += t['p']
-            sumr += t['r']
-        print('Process stat :')
-        if nb>0:
-            print('\t - nb queries : ',nb)
-            print('\t - Avg p : ', sump/nb)
-            print('\t - Avg r : ',sumr/nb)
-        else: print('\t no queries treated')
+
         print('The End!')
