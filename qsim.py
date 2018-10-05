@@ -38,7 +38,7 @@ import requests as http
 from urllib.parse import urlparse, quote_plus
 from configparser import ConfigParser, ExtendedInterpolation
 
-from tools.Socket import SocketClient, MsgProcessor
+from tools.Socket import SocketClient, MsgProcessor, SocketServer
 
 from scipy.stats import uniform
 
@@ -46,16 +46,60 @@ import os.path
 
 import unicodedata
 
+#==================================================
+class QueryCollectorMsgProcessor(MsgProcessor):
+    def __init__(self,out_queue,ctx):
+        super(QueryCollectorMsgProcessor, self).__init__()
+        self.out_queue = out_queue
+        self.ctx = ctx
+
+    def processIn(self,mesg) :
+        inQuery = json.loads(mesg)
+        path = inQuery['path']
+        print('[QueryCollector] %s '%path)
+        try: 
+
+            if path == "inform" :
+                data = inQuery['data']
+                qID = inQuery['no']
+
+                # print('Receiving request (%s):'%qID,data)
+                with self.ctx.lck :
+                    d = self.ctx.queryFeedback[qID]
+                    d['p'] = data['p']
+                    d['r'] = data['r']
+                    d['treated'] = True
+                    self.ctx.queryFeedback[qID] = d
+            else :
+                pass
+
+        except Exception as e:
+            print('[QueryCollector] ','Exception',e)
+            print('[QueryCollector] ','About:',inQuery)
+
+
+
+def processQuery(out_queue, ctx):
+    print('[processQuery] Started ')
+    server = SocketServer(host=ctx.host,port=ctx.port,ServerMsgProcessor = QueryCollectorMsgProcessor(out_queue,ctx) )
+    server.run2()
+    # out_queue.put(None)
+    print('[processQuery] Stopped')
+
+#==================================================
+
 class Context(object):
     """docstring for Context"""
 
     def __init__(self):
         super(Context, self).__init__()
+        self.manager = mp.Manager()
+        self.host = '0.0.0.0'
+        self.port = 5002
         self.sweep_ip = '127.0.0.1'
-        self.sweep_port = 5002
-        self.tpfc = TPFEP(service='http://localhost:5000/lift')
-        self.tpfc.setEngine(
-            '/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client')
+        self.sweep_port = 5003
+        self.tpfc = TPFEP(service='http://localhost:5001/lift')
+        self.tpfc.setEngine('/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client')
         self.tree = None
         self.debug = False
         self.listeNoms = None
@@ -70,6 +114,12 @@ class Context(object):
         self.lastProcessing = dt.timedelta() #-1
         self.gap = 60
 
+        self.queryFeedback = self.manager.dict()
+        self.lck = mp.Lock()
+        self.resQueue = mp.Queue()
+        self.queryProcess = mp.Process(target=processQuery, args=(self.resQueue, self))
+        self.queryProcess.start()
+
     def setSWEEPServer(self, host, port):
         self.sweep_ip = host
         self.sweep_port = port
@@ -77,12 +127,14 @@ class Context(object):
     def setTPFClient(self, tpfc):
         self.tpfc = tpfc
 
+    def stop(self):
+        self.queryProcess.terminate()
+        self.queryProcess.join()
 
 ctx = Context()
 randomU = uniform()
 
 #==================================================	
-
 
 TPF_SERVEUR = 'http://127.0.0.1:5000'
 TPF_CLIENT = '/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client'
@@ -197,7 +249,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
         current_date = dt.datetime.now()
         processes = []
         for i in range(nb_processes):
-            p = mp.Process(target=run, args=(compute_queue,result_queue, ctx, dataset))
+            p = mp.Process(target=run, args=(compute_queue,result_queue, ctx, dataset,file))
             processes.append(p)
         for p in processes:
             p.start()
@@ -263,7 +315,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
 
-def run(inq, outq, ctx, datasource):
+def run(inq, outq, ctx, datasource,file):
     sp = ctx.listeSP[datasource]
     qm = ctx.qm
     doPR = ctx.doPR
@@ -302,21 +354,34 @@ def run(inq, outq, ctx, datasource):
                 try:
 
                     # mess = '<query time="'+date2str(dt.datetime.now())+'" no="'+no+'"><![CDATA['+query+']]></query>'
-                    mess = '#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+ip+'@'+date2str(oldDate)+'\n'+query
+                    mess = '#bgp-list#'+quote_plus(bgp_list)+'\n'
+                    mess += '#ipdate#'+ip+'@'+date2str(oldDate)+'\n'
+                    qID = file+'#'+str(nbe) #+'@'+ip
+                    mess += '#qID#'+qID+'\n'
+                    mess += '#host#'+ctx.host+'\n'
+                    mess += '#port#'+str(ctx.port)+'\n'
+                    mess += query
+
+                    ctx.queryFeedback[qID] = {'file':file, 'no':nbe,'query':'...', 'treated' : False, 'p':0.0, 'r':0.0, 'inGap':True, 'empty':False, 'duration': 0.0 }
+                    # print(mess)
 
                     before = now()
                     rep = sp.query(mess)
                     after = now()
                     processing = after - before
                     # print('(%d)'%nbe,':',rep)
+                    inGap = True
+                    empty = False
                     if processing > gap:
                         messTO = '!!!!!!!!! hors Gap (%s) !!!!!!!!!'%gap.total_seconds()
                         code = ' TOGAP'
+                        inGap = False
                     else : 
                         messTO = ''
                         code = ''
                     if rep == []:
                         messEmpty = " Empty query !!! "+messTO
+                        empty = True
                         print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),messEmpty)
                         client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
                         data={'path': 'inform' ,'data': mess, 'errtype': 'Empty', 'no': no}
@@ -326,6 +391,12 @@ def run(inq, outq, ctx, datasource):
                         messOk = ': [...] '+ messTO
                         print('(%d, %s sec., %s)'%(nbe,processing.total_seconds(),valid),messOk)#,rep)
                         outq.put( (nbe, noq, processing, "Query ok"+code,valid)  )
+                    with ctx.lck :
+                        d = ctx.queryFeedback[qID]
+                        d['duration'] = processing.total_seconds()
+                        d['inGap'] = inGap
+                        d['empty'] = empty
+                        ctx.queryFeedback[qID] = d
                     break
 
                 except TPFClientError as e :
@@ -513,10 +584,24 @@ if __name__ == '__main__':
                     nb += 1
                 time.sleep(ctx.gap.total_seconds())
 
+        # On attend d'avoir tous les résultats
+        all = False
+        while not all:
+            all = True
+            for (id,t) in ctx.queryFeedback.items() :
+                if not(t['treated']) : 
+                    all = False
+                    time.sleep(1)
+                    break;
+
     except KeyboardInterrupt:
         pass
     finally:
-        print('\n\n The end!')
+        print('\n\n To conclude :')
         if nb>0 :
             print('Avg processing: ',sumT/nb)
         print('Queries out of gap: ',pbGap)
+        ctx.stop()
+        for (id,t) in ctx.queryFeedback.items() :
+            print(id,':',t)
+        print('The End!')

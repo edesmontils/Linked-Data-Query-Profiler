@@ -34,7 +34,7 @@ from functools import reduce
 
 import json
 
-from tools.Socket import SocketServer, MsgProcessor
+from tools.Socket import SocketServer, MsgProcessor, SocketClient
 import argparse
 
 from configparser import ConfigParser, ExtendedInterpolation
@@ -459,19 +459,31 @@ class QueryCollectorMsgProcessor(MsgProcessor):
                 print('@ ', time)
                 # print('fromISO ', fromISO(q.attrib['time']) )
                 print('now', now())
+
                 if query.startswith('#bgp-list#') :
                     t = query.split('\n')
                     bgp_list = unquote_plus(t[0][10:])
                     del t[0]
                     queryCode = t[0][8:]
                     del t[0]
+                    if t[0].startswith('#qID#') :
+                        clientQueryID = t[0][5:]
+                        del t[0]
+                        clientHost = t[0][6:]
+                        del t[0]
+                        clientPort = t[0][6:]
+                        del t[0]
+                        queryInfo = (clientQueryID, clientHost,int(clientPort))
+                    else:
+                        queryInfo = ()
                     query = '\n'.join(t)
                 else:
                     bgp_list = '<l/>'
                     queryCode = ip
+                    queryInfo = ()
 
                 l = []
-                print('[QueryCollector] ---',queryCode,'---')
+                print('[QueryCollector] ---',queryCode, '|', queryInfo ,'---')
                 print('[QueryCollector] ',query)
                 print('[QueryCollector] ',bgp_list)
                 lbgp = etree.parse(StringIO(bgp_list), self.ctx.parser)
@@ -498,6 +510,8 @@ class QueryCollectorMsgProcessor(MsgProcessor):
                         qId = self.ctx.qId.value
                         if queryID is None:
                             queryID = 'id'+str(qId)
+                        self.ctx.queryFeedback[qId] = queryInfo
+                        print(self.ctx.queryFeedback)
                     self.out_queue.put(
                         (SWEEP_IN_QUERY, qId, (time, ip, query, bgp, str(queryID)+'_'+str(rang),queryCode)))
 
@@ -954,6 +968,15 @@ def processMemory(ctx, duration, inQueue):
                         for e in tpk:
                             ctx.topKQueries.append(sscQueries.monitored[e])
 
+                        queryInfo = ctx.queryFeedback[id]
+                        if (queryInfo is not None) and (queryInfo != () ) :
+                            (clientQueryID, clientHost,clientPort) = queryInfo
+                            data={'path': 'inform' ,'data': {'p':precision, 'r':recall}, 'no': clientQueryID}
+                            print('Envoie d''infos à ',clientHost,':',clientPort)
+                            client = SocketClient(host = clientHost, port = clientPort, ClientMsgProcessor = MsgProcessor() )
+                            client.sendMsg2(data)
+                        else: print('Pas d''infos à retourner')
+
                 if bgp is not None :
                     sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
                     if SWEEP_ALL_BGP or (len(sbgp) > 1):
@@ -1033,6 +1056,7 @@ class SWEEP(MsgProcessor):  # Abstract Class
         self.memDuration = 10*gap # for short term memory
 
         self.usersMemory = self.manager.dict()
+        self.queryFeedback = self.manager.dict()
 
         self.nbBGP = mp.Value('i', 0)
         self.nbREQ = mp.Value('i', 0)
