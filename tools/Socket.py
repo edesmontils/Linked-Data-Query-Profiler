@@ -114,7 +114,7 @@ class Socket(object):
         self.send(b"%d"%l)
         msgServeur = self.recv()
         if msgServeur != b"1" :
-            print("pb d'échange (1)")
+            print("pb exchange (1)")
             rep = False
         else: 
             self.sendall(msg)
@@ -157,7 +157,7 @@ class SocketServer(Socket) :
             while True :
                 self.s.listen(5)
                 connexion = self.accept()
-                print ("Client connecté, adresse %s" % connexion.clAddr())
+                print ("Client connected, @ %s" % connexion.clAddr())
                 mesg = connexion.getMsg()
                 # print("Server received : %s" % mesg)
 
@@ -172,7 +172,7 @@ class SocketServer(Socket) :
                     else: 
                         res = connexion.putMsg("1")
                 else : 
-                    print("Pb de réception")
+                    print("Pb de receiving data")
                     res = connexion.putMsg("0")
 
                 connexion.close()
@@ -189,7 +189,7 @@ class SocketServer(Socket) :
             while True :
                 self.s.listen(5)
                 connexion = self.accept()
-                print ("Client connecté, adresse %s" % connexion.clAddr())
+                print ("Client connected @ %s" % connexion.clAddr())
                 mesg = connexion.getMsg2()
                 # print("Server received : %s" % mesg)
                 if mesg:
@@ -236,9 +236,9 @@ class SocketClient(Socket) :
                 (self.processor.cl_ip,self.processor.cl_port) = (self.cl_ip, self.cl_port)
                 (self.processor.loc_ip,self.processor.loc_port) = (self.loc_ip,self.loc_port)
         except socket.error:
-            print ("La connexion a échoué (%s)."%(self.loc_ip+':'+str(self.loc_port)))
+            print ("Connexion failed (%s)."%(self.loc_ip+':'+str(self.loc_port)))
             sys.exit()
-        print ("Connexion établie avec le serveur (%s)."%(self.cl_ip+':'+str(self.cl_port)))
+        print ("Connexion on with server (%s)."%(self.cl_ip+':'+str(self.cl_port)))
 
     def sendMsg(self, mesg) :
         self.connect()
@@ -252,7 +252,7 @@ class SocketClient(Socket) :
 
         # print("Réponse : %s"%msgServeur)
         if msgServeur == b"0" :
-            print("pb d'échange (2)")
+            print("pb exchange (2)")
             sys.exit()        
 
         # print ("Connexion terminée.")
