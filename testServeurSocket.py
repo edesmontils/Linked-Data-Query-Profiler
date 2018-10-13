@@ -9,7 +9,7 @@ class MyMsgProcessor(MsgProcessor):
 
 	def processIn(self,mesg) :
 		rep = json.loads(mesg)
-		print(rep)
+		print('Server:',rep)
 		return json.dumps(  [0,0,0,0]  )
 
 server = SocketServer(ServerMsgProcessor = MyMsgProcessor() )

@@ -7,10 +7,14 @@ class MyMsgProcessor(MsgProcessor):
 		super(MyMsgProcessor, self).__init__()
 
 	def processOut(self,mesg) :
-		return json.dumps(mesg)
+		rep = json.dumps(mesg)
+		print('Client out:',rep)
+		return rep
 
 	def processIn(self,mesg) :
-		return json.loads(mesg)
+		rep = json.loads(mesg)
+		print('Client in:',rep)
+		return rep
 
 client = SocketClient(ClientMsgProcessor = MyMsgProcessor() )
 
