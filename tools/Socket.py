@@ -130,7 +130,7 @@ class Socket(object):
 #==================================================
 
 class SocketServer(Socket) :
-    def __init__(self, s=None, port=5005, host = '127.0.0.1', msgSize = 128, ServerMsgProcessor = None):
+    def __init__(self, s=None, port=5010, host = '127.0.0.1', msgSize = 128, ServerMsgProcessor = None):
         super(SocketServer, self).__init__(s,port,host,msgSize)
         if ServerMsgProcessor is not None :
             assert isinstance(ServerMsgProcessor,MsgProcessor), 'ServerMsgProcessor must be a MsgProcessor'
