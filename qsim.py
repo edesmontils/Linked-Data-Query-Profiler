@@ -589,9 +589,10 @@ if __name__ == '__main__':
         while not all:
             all = True
             for (id,t) in ctx.queryFeedback.items() :
+                print('Testing server ending')
                 if not(t['treated']) : 
                     all = False
-                    time.sleep(1)
+                    time.sleep(3)
                     break;
 
     except KeyboardInterrupt:
