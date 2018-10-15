@@ -140,6 +140,7 @@ class SocketServer(Socket) :
     def bind(self):
         #Bind socket to local host and port
         try:
+            self.s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.s.bind((self.loc_ip, self.loc_port))
         except socket.error as e:
             print ('Bind failed.',e)
