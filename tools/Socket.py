@@ -141,8 +141,8 @@ class SocketServer(Socket) :
         #Bind socket to local host and port
         try:
             self.s.bind((self.loc_ip, self.loc_port))
-        except socket.error:
-            print ('Bind failed.')
+        except socket.error as e:
+            print ('Bind failed.',e)
             sys.exit()   
         # print ('Socket bind complete')
 
