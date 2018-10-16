@@ -585,15 +585,15 @@ if __name__ == '__main__':
                 time.sleep(ctx.gap.total_seconds())
 
         # On attend d'avoir tous les résultats
-        # all = False
-        # while not all:
-        #     all = True
-        #     for (id,t) in ctx.queryFeedback.items() :
-        #         print('Testing server ending')
-        #         if not(t['treated']) : 
-        #             all = False
-        #             time.sleep(3)
-        #             break;
+        all = False
+        while not all:
+            all = True
+            for (id,t) in ctx.queryFeedback.items() :
+                print('Testing server ending')
+                if not(t['treated']) : 
+                    all = False
+                    time.sleep(3)
+                    break;
 
     except KeyboardInterrupt:
         pass
