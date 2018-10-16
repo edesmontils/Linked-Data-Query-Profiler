@@ -542,6 +542,7 @@ if __name__ == '__main__':
         nb_users = 0
         if (len(file_set)==1) and os.path.isdir(file_set[0]) :
             directory = file_set[0]
+            XMLparser = etree.XMLParser(recover=True, strip_cdata=True)
             users_file = directory+'/users.xml'
             if existFile(users_file): 
                 users = etree.parse(users_file, XMLparser)
