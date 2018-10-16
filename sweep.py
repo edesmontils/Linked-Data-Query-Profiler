@@ -511,7 +511,7 @@ class QueryCollectorMsgProcessor(MsgProcessor):
                         if queryID is None:
                             queryID = 'id'+str(qId)
                         self.ctx.queryFeedback[qId] = queryInfo
-                        print(self.ctx.queryFeedback)
+                        # print(self.ctx.queryFeedback)
                     self.out_queue.put(
                         (SWEEP_IN_QUERY, qId, (time, ip, query, bgp, str(queryID)+'_'+str(rang),queryCode)))
 
