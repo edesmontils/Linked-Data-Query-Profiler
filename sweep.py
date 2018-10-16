@@ -785,7 +785,7 @@ def processValidation(in_queue, memoryQueue, ctx):
                 # print('[processValidation] BGP Analysis')
                 if bgp is not None: # HEURISTIQUE : Un BGP qui contient un simple triplet n'est pas valide
                     ctx.stat['genBGP'] += 1
-                    if (len(bgp.input_set) ==1) and bgp.tp_set[0].isTriple() and false :
+                    if (len(bgp.input_set) ==1) and bgp.tp_set[0].isTriple() :
                         # print("=================>     BGP not inserted")
                         # bgp.print()
                         pass
