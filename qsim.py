@@ -363,7 +363,7 @@ def run(inq, outq, ctx, datasource,file):
                     mess += query
 
                     ctx.queryFeedback[qID] = {'file':file, 'no':nbe,'query':'...', 'treated' : False, 'p':0.0, 'r':0.0, 'inGap':True, 'empty':False, 'duration': 0.0 }
-                    print(mess)
+                    # print(mess)
 
                     before = now()
                     rep = sp.query(mess)
