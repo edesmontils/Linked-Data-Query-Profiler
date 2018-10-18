@@ -235,7 +235,7 @@ class TPFEP(Endpoint):
     def query(self, qstr, params = []):
         try:
             # 'run' n'existe que depuis python 3.5 !!! donc pas en 3.2 !!!!
-            print('Execute:',self.appli,self.service+'/'+self.dataset, self.clientParams,params,qstr)
+            # print('Execute:',self.appli,self.service+'/'+self.dataset, self.clientParams,params,qstr)
             fileName = "./tmp/query"+date2filename(now())+".sparql"
             if os.path.exists(fileName) : fileName = 'snd'+fileName
             with open(fileName, "w") as query_file:
