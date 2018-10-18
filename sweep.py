@@ -976,10 +976,10 @@ def processMemory(ctx, duration, inQueue):
                         if (queryInfo is not None) and (queryInfo != () ) :
                             (clientQueryID, clientHost,clientPort) = queryInfo
                             data={'path': 'inform' ,'data': {'p':precision, 'r':recall}, 'no': clientQueryID}
-                            print('Envoie d''infos à ',clientHost,':',clientPort)
+                            print('Sending data to ',clientHost,':',clientPort)
                             client = SocketClient(host = clientHost, port = clientPort, ClientMsgProcessor = MsgProcessor() )
                             client.sendMsg2(data)
-                        else: print('Pas d''infos à retourner')
+                        else: print('No data to send')
 
                 if bgp is not None :
                     sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
