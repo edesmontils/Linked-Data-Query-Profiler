@@ -19,10 +19,11 @@ import hashlib
 import csv
 import subprocess
 import os.path
+import os
 import socket
 import sys
 import multiprocessing as mp
-
+from tools.tools import now,date2filename
 from SPARQLWrapper import SPARQLWrapper, JSON #, SPARQLWrapperException
 from SPARQLWrapper.Wrapper import QueryResult, QueryBadFormed, EndPointNotFound, EndPointInternalError
 
@@ -222,6 +223,8 @@ class TPFEP(Endpoint):
         self.reQueryNotSupported = re.compile(r'\A(ERROR\:).*?\n\n(The\ query\ is\ not\ yet\ supported).*',re.IGNORECASE)
         self.appli = 'ldf-client'
         self.clientParams = clientParams
+        if not os.path.exists('./tmp'):
+            os.makedirs('./tmp')
 
     def setEngine(self,en):
         self.appli = en
@@ -232,11 +235,14 @@ class TPFEP(Endpoint):
     def query(self, qstr, params = []):
         try:
             # 'run' n'existe que depuis python 3.5 !!! donc pas en 3.2 !!!!
-            # print('Execute:',self.appli,self.service+'/'+self.dataset, self.clientParams,params,qstr)
+            print('Execute:',self.appli,self.service+'/'+self.dataset, self.clientParams,params,qstr)
+            fileName = "./tmp/query"+date2filename(now())+".sparql"
+            if os.path.exists(fileName) : fileName = 'snd'+fileName
+            with open(fileName, "w") as query_file:
+                query_file.write(qstr)
+            commande = [self.appli, self.service+'/'+self.dataset, "-f"+fileName] + self.clientParams  + params
 
-            commande = [self.appli, self.service+'/'+self.dataset] + self.clientParams  + params  + ['-q '+qstr]
-
-            ret = subprocess.run(commande, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)
+            ret = subprocess.run( commande , stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)
 
         except subprocess.CalledProcessError as e :
             raise TPFClientError( "TPF endpoint error (subprocess CalledProcessError) : "+e.__str__() )
@@ -254,6 +260,7 @@ class TPFEP(Endpoint):
             try:
                 js = json.loads(out)
                 # print(js)
+                os.remove(fileName)
                 return js
             except json.JSONDecodeError as e: #Fonctionne pas en python 3.2... que depuis 3.5 !!!!
                 # raise TPFClientError( "TPF endpoint error (JSONDecodeError) : %s"%str(e) )  

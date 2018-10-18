@@ -441,6 +441,10 @@ class QueryCollectorMsgProcessor(MsgProcessor):
                 tree = etree.parse(StringIO(data), self.ctx.parser)
                 q = tree.getroot()
 
+                print('=========== query ===========')
+                # print(etree.tostring(q, pretty_print=True))
+                print(mesg)
+                print('=============================')
                 client = q.get('client')
                 # if client is None:
                 #     q.set('client',str(self.cl_ip) )

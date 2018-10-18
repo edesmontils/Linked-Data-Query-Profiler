@@ -363,7 +363,7 @@ def run(inq, outq, ctx, datasource,file):
                     mess += query
 
                     ctx.queryFeedback[qID] = {'file':file, 'no':nbe,'query':'...', 'treated' : False, 'p':0.0, 'r':0.0, 'inGap':True, 'empty':False, 'duration': 0.0 }
-                    # print(mess)
+                    print(mess)
 
                     before = now()
                     rep = sp.query(mess)
@@ -463,7 +463,7 @@ def loadDatabases(configFile, atpfServer, atpfClient) :
         if ref.text is None:
             ref.text = ''
         print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s xxxxx'])
+        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s0.0.0.0'])
         sp.setEngine(atpfClient)
         #if ato: sp.setTimeout(ato)
         ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
