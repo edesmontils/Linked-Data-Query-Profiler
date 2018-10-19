@@ -249,7 +249,7 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
         current_date = dt.datetime.now()
         processes = []
         for i in range(nb_processes):
-            p = mp.Process(target=run, args=(compute_queue,result_queue, ctx, dataset,file))
+            p = mp.Process(target=run, args=(compute_queue,result_queue, ctx, dataset,file,i))
             processes.append(p)
         for p in processes:
             p.start()
@@ -315,8 +315,11 @@ def play(file,ctx,nb_processes, dataset, nbq,offset, doEmpty, period):
 def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
 
-def run(inq, outq, ctx, datasource,file):
-    sp = ctx.listeSP[datasource]
+def run(inq, outq, ctx, datasource,file,nop):
+    (base_sp, atpfServer, atpfClient, datasourceName, params ) = ctx.listeSP[datasource]
+    sp = TPFEP(service=atpfServer, dataset=datasourceName, clientParams=params, baseName=str(nop))
+    sp.setEngine(atpfClient)
+
     qm = ctx.qm
     doPR = ctx.doPR
     gap = ctx.gap
@@ -448,7 +451,7 @@ def run(inq, outq, ctx, datasource,file):
     outq.put(None)
 
 
-def loadDatabases(configFile, atpfServer, atpfClient) :
+def loadDatabases(configFile, atpfServer, atpfClient,nb_processes) :
     XMLparser = etree.XMLParser(recover=True, strip_cdata=True)
     ctx.tree = etree.parse(configFile, XMLparser)
     #---
@@ -463,13 +466,13 @@ def loadDatabases(configFile, atpfServer, atpfClient) :
         if ref.text is None:
             ref.text = ''
         print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s0.0.0.0'])
+        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s0.0.0.0',])
         sp.setEngine(atpfClient)
         #if ato: sp.setTimeout(ato)
         ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
                                         'description': etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
                                         'tables': []}
-        ctx.listeSP[l.get('nom')] = sp
+        ctx.listeSP[l.get('nom')] = (sp, atpfServer, atpfClient, f.get('nom'), ['-s0.0.0.0',] )
     ctx.listeNoms = list(ctx.listeBases.keys())
     ctx.version = ctx.tree.getroot().get('version')
     ctx.name = ctx.tree.getroot().get('name')
@@ -529,7 +532,7 @@ if __name__ == '__main__':
     # http://localhost:5001/dbpedia_3_9 server dppedia si : ssh -L 5001:172.16.9.3:5001 desmontils@172.16.9.15
     ctx.gap = dt.timedelta(minutes=agap)
 
-    loadDatabases('config.xml', atpfServer, atpfClient)
+    loadDatabases('config.xml', atpfServer, atpfClient,args.nb_processes)
 
     if avalid:
         ctx.doPR = True

@@ -971,7 +971,7 @@ def processMemory(ctx, duration, inQueue):
                     with ctx.lck :
                         for e in tpk:
                             ctx.topKQueries.append(sscQueries.monitored[e])
-
+                        print('(%d) before:'%id,ctx.queryFeedback)
                         queryInfo = ctx.queryFeedback[id]
                         if (queryInfo is not None) and (queryInfo != () ) :
                             (clientQueryID, clientHost,clientPort) = queryInfo
@@ -979,8 +979,11 @@ def processMemory(ctx, duration, inQueue):
                             print('Sending data to ',clientHost,':',clientPort)
                             client = SocketClient(host = clientHost, port = clientPort, ClientMsgProcessor = MsgProcessor() )
                             client.sendMsg2(data)
-                        else: print('No data to send')
-
+                            del ctx.queryFeedback[id]
+                        else: 
+                            print('No data to send')
+                            if (queryInfo is not None) and (queryInfo == () ) : del ctx.queryFeedback[id]
+                        print('(%d) after:'%id,ctx.queryFeedback)
                 if bgp is not None :
                     sbgp = canonicalize_sparql_bgp([(tp.s, tp.p, tp.o) for tp in bgp.tp_set])
                     if SWEEP_ALL_BGP or (len(sbgp) > 1):
@@ -1028,6 +1031,8 @@ def processMemory(ctx, duration, inQueue):
 
     except KeyboardInterrupt:
         pass
+    except Exception as e :
+        print('Erreur:',e)
     finally :
         # ctx.saveMemory()
         # ctx.saveUsers()

@@ -216,13 +216,14 @@ class DBPediaEP (SPARQLEP):
 #==================================================
 
 class TPFEP(Endpoint):
-    def __init__(self,service = DEFAULT_TPF_EP, dataset = DEFAULT_TPF_DATASET, clientParams = [], cacheDir = '.'):
+    def __init__(self,service = DEFAULT_TPF_EP, dataset = DEFAULT_TPF_DATASET, clientParams = [], baseName = "", cacheDir = '.'):
         Endpoint.__init__(self,service, cacheType=MODE_TE_TPF, cacheDir=cacheDir)
         self.dataset = dataset
         self.reSyntaxError = re.compile(r'\A(ERROR\:).*?\n\n(Syntax\ error\ in\ query).*',re.IGNORECASE)
         self.reQueryNotSupported = re.compile(r'\A(ERROR\:).*?\n\n(The\ query\ is\ not\ yet\ supported).*',re.IGNORECASE)
         self.appli = 'ldf-client'
         self.clientParams = clientParams
+        self.baseName = baseName
         if not os.path.exists('./tmp'):
             os.makedirs('./tmp')
 
@@ -236,7 +237,7 @@ class TPFEP(Endpoint):
         try:
             # 'run' n'existe que depuis python 3.5 !!! donc pas en 3.2 !!!!
             # print('Execute:',self.appli,self.service+'/'+self.dataset, self.clientParams,params,qstr)
-            fileName = "./tmp/query"+date2filename(now())+".sparql"
+            fileName = "./tmp/query-"+self.baseName+"-"+date2filename(now())+".sparql"
             if os.path.exists(fileName) : fileName = 'snd'+fileName
             with open(fileName, "w") as query_file:
                 query_file.write(qstr)
@@ -245,6 +246,11 @@ class TPFEP(Endpoint):
             ret = subprocess.run( commande , stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)
 
         except subprocess.CalledProcessError as e :
+            with open(fileName, "a") as query_file:
+                query_file.write('--- err stdout ---')
+                query_file.write(e.stdout.decode('UTF-8'))
+                query_file.write('--- err stderr ---')
+                query_file.write(e.stderr.decode('UTF-8'))
             raise TPFClientError( "TPF endpoint error (subprocess CalledProcessError) : "+e.__str__() )
         except subprocess.TimeoutExpired as e : # uniquement python 3.3 !!!
             raise TimeOut("TPF timeout (subprocess TimeoutExpired) : "+e.__str__())
