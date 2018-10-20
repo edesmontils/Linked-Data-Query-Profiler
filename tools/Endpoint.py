@@ -247,9 +247,9 @@ class TPFEP(Endpoint):
 
         except subprocess.CalledProcessError as e :
             with open(fileName, "a") as query_file:
-                query_file.write('--- err stdout ---')
+                query_file.write('\n--- err stdout ---\n')
                 query_file.write(e.stdout.decode('UTF-8'))
-                query_file.write('--- err stderr ---')
+                query_file.write('\n--- err stderr ---\n')
                 query_file.write(e.stderr.decode('UTF-8'))
             raise TPFClientError( "TPF endpoint error (subprocess CalledProcessError) : "+e.__str__() )
         except subprocess.TimeoutExpired as e : # uniquement python 3.3 !!!
