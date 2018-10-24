@@ -243,7 +243,7 @@ class TPFEP(Endpoint):
                 query_file.write(qstr)
             commande = [self.appli, self.service+'/'+self.dataset, "-f"+fileName] + self.clientParams  + params
 
-            ret = subprocess.run( commande , stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut)
+            ret = subprocess.run( commande , stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True, timeout=self.timeOut, encoding='UTF-8')
 
         except subprocess.CalledProcessError as e :
             with open(fileName, "a") as query_file:

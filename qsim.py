@@ -316,7 +316,7 @@ def toStr(s,p,o):
     return serialize2string(s)+' '+serialize2string(p)+' '+serialize2string(o)
 
 def run(inq, outq, ctx, datasource,file,nop):
-    (base_sp, atpfServer, atpfClient, datasourceName, params ) = ctx.listeSP[datasource]
+    (atpfServer, atpfClient, datasourceName, params ) = ctx.listeSP[datasource]
     sp = TPFEP(service=atpfServer, dataset=datasourceName, clientParams=params, baseName=str(nop))
     sp.setEngine(atpfClient)
 
@@ -466,13 +466,13 @@ def loadDatabases(configFile, atpfServer, atpfClient,nb_processes) :
         if ref.text is None:
             ref.text = ''
         print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s0.0.0.0',])
-        sp.setEngine(atpfClient)
+        # sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s0.0.0.0',])
+        # sp.setEngine(atpfClient)
         #if ato: sp.setTimeout(ato)
         ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
                                         'description': etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
                                         'tables': []}
-        ctx.listeSP[l.get('nom')] = (sp, atpfServer, atpfClient, f.get('nom'), ['-s0.0.0.0',] )
+        ctx.listeSP[l.get('nom')] = (atpfServer, atpfClient, f.get('nom'), ['-s0.0.0.0',] )
     ctx.listeNoms = list(ctx.listeBases.keys())
     ctx.version = ctx.tree.getroot().get('version')
     ctx.name = ctx.tree.getroot().get('name')
