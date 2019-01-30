@@ -255,6 +255,9 @@ def doTab(s):
 
 
 def treat(query, bgp_list, ip, datasource):
+    (atpfServer, atpfClient, datasourceName, params ) = ctx.listeSP[datasource]
+    sp = TPFEP(service=atpfServer, dataset=datasourceName, clientParams=params, baseName="qsim-ws")
+    sp.setEngine(atpfClient)
     try:
         ctx.nbQuery += 1
         nbe = ctx.nbQuery
@@ -283,13 +286,20 @@ def treat(query, bgp_list, ip, datasource):
             # ctx.BGPNb += 1
             # bgp_uri = ctx.addr_ext+'/bgp/'+str(ctx.BGPNb)
             # ctx.BGPRefList[ctx.BGPNb] = bgp_list
-            res = ctx.listeSP[datasource].query('#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+str(ip)+'\n'+query)
+            # res = ctx.listeSP[datasource].query('#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+str(ip)+'\n'+query)
+            mess = '#bgp-list#'+quote_plus(bgp_list)+'\n'
+            mess += '#ipdate#'+str(ip)+'\n'
+            qID = "qsim-ws"+'#'+str(ctx.nbQuery) #+'@'+ip
+            mess += '#qID#'+qID+'\n'
+            mess += '#host#'+ctx.sweep_host+'\n'
+            mess += '#port#'+str(ctx.sweep_port)+'\n'
+            mess += query
+            res = sp.query(mess)
             after = now()
             ctx.lastProcessing = after - before
             # print('(%d)'%nbe,':',rep)
             if res == []:
-                print('(%d, %s sec.)' % (
-                    nbe, ctx.lastProcessing.total_seconds()), "Empty query !!!")
+                print('(%d, %s sec.)' % (nbe, ctx.lastProcessing.total_seconds()), "Empty query !!!")
                 client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
                 data={'path': 'inform' ,'data': mess, 'errtype': 'Empty', 'no': no}
                 client.sendMsg2(data)
@@ -363,13 +373,13 @@ def loadDatabases(configFile, atpfServer, atpfClient) :
         if ref.text is None:
             ref.text = ''
         print('Configure ', l.get('nom'), ' in ', atpfServer+'/'+f.get('nom'))
-        sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s xxxxx'])
-        sp.setEngine(atpfClient)
+        # sp = TPFEP(service=atpfServer, dataset=f.get('nom'), clientParams=['-s xxxxx'])
+        # sp.setEngine(atpfClient)
         #if ato: sp.setTimeout(ato)
         ctx.listeBases[l.get('nom')] = {'fichier': f.get('nom'), 'prefixe': f.get('prefixe'), 'référence': ref.text,
                                         'description': etree.tostring(l.find('description'), encoding='utf8').decode('utf8'),
                                         'tables': []}
-        ctx.listeSP[l.get('nom')] = sp
+        ctx.listeSP[l.get('nom')] = (atpfServer, atpfClient, f.get('nom'), ['-s0.0.0.0',] ) # = sp
     ctx.listeNoms = list(ctx.listeBases.keys())
     ctx.version = ctx.tree.getroot().get('version')
     ctx.name = ctx.tree.getroot().get('name')
@@ -381,14 +391,6 @@ def loadDatabases(configFile, atpfServer, atpfClient) :
 #==================================================
 #==================================================
 #==================================================
-
-# launch : python3.6 ldqp-WS.py
-# example to request : curl -d 'query="select * where {?s :p1 ?o}"' http://127.0.0.1:8090/_add_query
-
-
-TPF_SERVEUR = 'http://127.0.0.1:5000'
-TPF_CLIENT = '/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client'
-SWEEP_SERVEUR = 'http://127.0.0.1:5002'
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='QSIM')
