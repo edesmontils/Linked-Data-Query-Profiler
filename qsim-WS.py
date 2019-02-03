@@ -282,7 +282,6 @@ def treat(query, bgp_list, ip, datasource):
         # pprint(res)
         # print(type(res))
         try:
-            before = now()
             # ctx.BGPNb += 1
             # bgp_uri = ctx.addr_ext+'/bgp/'+str(ctx.BGPNb)
             # ctx.BGPRefList[ctx.BGPNb] = bgp_list
@@ -294,6 +293,7 @@ def treat(query, bgp_list, ip, datasource):
             mess += '#host#'+ctx.sweep_host+'\n'
             mess += '#port#'+str(ctx.sweep_port)+'\n'
             mess += query
+            before = now()
             res = sp.query(mess)
             after = now()
             ctx.lastProcessing = after - before
