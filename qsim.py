@@ -26,9 +26,9 @@ from tools.tools import now, date2str, date2filename, existFile
 from lib.QueryManager import QueryManager
 from lib.bgp import serializeBGP2str
 
-from flask import Flask, render_template, request, jsonify
-# http://flask.pocoo.org/docs/0.12/
-# from flask_cas import CAS, login_required
+# from flask import Flask, render_template, request, jsonify
+# # http://flask.pocoo.org/docs/0.12/
+# # from flask_cas import CAS, login_required
 
 from lxml import etree  # http://lxml.de/index.html#documentation
 
@@ -118,6 +118,8 @@ class Context(object):
         self.lck = mp.Lock()
         self.resQueue = mp.Queue()
         self.queryProcess = mp.Process(target=processQuery, args=(self.resQueue, self))
+
+    def start(self):
         self.queryProcess.start()
 
     def setSWEEPServer(self, host, port):
@@ -521,15 +523,16 @@ if __name__ == '__main__':
     ato = float(qsimCfg['TimeOut'])
     ahost = qsimCfg['LocalIP']
     aport = qsimCfg['QSIM']
+    abackport = qsimCfg['BackPort']
 
     sweepCfg = cfg['SWEEP']
     asweep = sweepCfg['LocalIP']
     ctx.ports = { 'DataCollector' : int(sweepCfg['DataCollector']), 'QueryCollector' : int(sweepCfg['QueryCollector']), 'DashboardEntry' : int(sweepCfg['DashboardEntry']) }
     ctx.sweep_host = sweepCfg['LocalIP']
+    ctx.host = ahost
+    ctx.port = int(abackport)
 
     ctx.setSWEEPServer(ctx.sweep_host,ctx.ports['QueryCollector'])
-    # http://localhost:5000/lift : serveur TPF LIFT (exemple du papier)
-    # http://localhost:5001/dbpedia_3_9 server dppedia si : ssh -L 5001:172.16.9.3:5001 desmontils@172.16.9.15
     ctx.gap = dt.timedelta(minutes=agap)
 
     loadDatabases('config.xml', atpfServer, atpfClient,args.nb_processes)
@@ -538,9 +541,9 @@ if __name__ == '__main__':
         ctx.doPR = True
     try:
 
-        print('Running qsim on ', ahost+':'+aport)
+        print('Running qsim on ', ctx.host+':'+ctx.port)
         print('Start simulating with %d processes'%args.nb_processes)
-
+        cxt.start()
         file_set = args.files
         nb_users = 0
         if (len(file_set)==1) and os.path.isdir(file_set[0]) :

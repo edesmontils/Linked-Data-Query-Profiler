@@ -9,10 +9,16 @@ Application ...
 #    All rights reserved.
 #    GPL v 2.0 license.
 
+from threading import *
+import multiprocessing as mp
+
 import datetime as dt
+import time
+
 import argparse
 from tools.Endpoint import TPFEP, TPFClientError, TimeOut, QueryBadFormed, EndpointException
 from tools.tools import now, date2str
+import json
 
 from lib.QueryManager import QueryManager
 from lib.bgp import serializeBGP2str
@@ -29,19 +35,67 @@ import requests as http
 from urllib.parse import urlparse, quote_plus
 from configparser import ConfigParser, ExtendedInterpolation
 
-from tools.Socket import SocketClient, MsgProcessor
+from tools.Socket import SocketClient, MsgProcessor, SocketServer
 
+import unicodedata
+
+#==================================================
+class QueryCollectorMsgProcessor(MsgProcessor):
+    def __init__(self,out_queue,ctx):
+        super(QueryCollectorMsgProcessor, self).__init__()
+        self.out_queue = out_queue
+        self.ctx = ctx
+
+    def processIn(self,mesg) :
+        inQuery = json.loads(mesg)
+        path = inQuery['path']
+        # print('[QueryCollector] %s '%path)
+        try: 
+
+            if path == "inform" :
+                data = inQuery['data']
+                qID = inQuery['no']
+
+                # print('Receiving request (%s):'%qID,data)
+                # print('current queryFeedback :')
+                # for (id,t) in self.ctx.queryFeedback.items() :
+                #     print('\t * ',id,':',t)
+                with self.ctx.lck :
+                    d = self.ctx.queryFeedback[qID]
+                    d['p'] = data['p']
+                    d['r'] = data['r']
+                    d['treated'] = True
+                    self.ctx.queryFeedback[qID] = d
+            else :
+                pass
+
+        except Exception as e:
+            print('[QueryCollector] ','Exception',e)
+            print('[QueryCollector] ','About:',inQuery)
+
+
+
+def processQuery(out_queue, ctx):
+    print('[processQuery] Started ')
+    server = SocketServer(host=ctx.host,port=ctx.port,ServerMsgProcessor = QueryCollectorMsgProcessor(out_queue,ctx) )
+    server.run2()
+    # out_queue.put(None)
+    print('[processQuery] Stopped')
+
+#==================================================
 
 class Context(object):
     """docstring for Context"""
 
     def __init__(self):
         super(Context, self).__init__()
+        self.manager = mp.Manager()
+        self.host = '0.0.0.0'
+        self.port = 5002
         self.sweep_ip = '127.0.0.1'
-        self.sweep_port = 5002
+        self.sweep_port = 5003
         self.tpfc = TPFEP(service='http://localhost:5000/lift')
-        self.tpfc.setEngine(
-            '/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client')
+        self.tpfc.setEngine('/Users/desmontils-e/Programmation/TPF/Client.js-master/bin/ldf-client')
         self.tree = None
         self.debug = False
         self.listeNoms = None
@@ -55,7 +109,13 @@ class Context(object):
         self.doPR = False
         self.lastProcessing = dt.timedelta() #-1
         self.gap = 60
+        self.queryFeedback = self.manager.dict()
+        self.lck = mp.Lock()
+        self.resQueue = mp.Queue()
+        self.queryProcess = mp.Process(target=processQuery, args=(self.resQueue, self))
 
+    def start(self):
+        self.queryProcess.start()
 
     def setSWEEPServer(self, host, port):
         self.sweep_ip = host
@@ -64,6 +124,9 @@ class Context(object):
     def setTPFClient(self, tpfc):
         self.tpfc = tpfc
 
+    def stop(self):
+        self.queryProcess.terminate()
+        self.queryProcess.join()
 
 ctx = Context()
 
@@ -259,6 +322,7 @@ def treat(query, bgp_list, ip, datasource):
     sp = TPFEP(service=atpfServer, dataset=datasourceName, clientParams=params, baseName="qsim-ws")
     sp.setEngine(atpfClient)
     try:
+        query = unicodedata.normalize("NFKD", query)
         ctx.nbQuery += 1
         nbe = ctx.nbQuery
         doPR = ctx.doPR
@@ -288,29 +352,36 @@ def treat(query, bgp_list, ip, datasource):
             # res = ctx.listeSP[datasource].query('#bgp-list#'+quote_plus(bgp_list)+'\n'+'#ipdate#'+str(ip)+'\n'+query)
             mess = '#bgp-list#'+quote_plus(bgp_list)+'\n'
             mess += '#ipdate#'+str(ip)+'\n'
-            qID = "qsim-ws"+'#'+str(ctx.nbQuery) #+'@'+ip
+            qID = "qsim-ws"+'#'+str(nbe) #+'@'+ip
             mess += '#qID#'+qID+'\n'
-            mess += '#host#'+ctx.sweep_host+'\n'
-            mess += '#port#'+str(ctx.sweep_port)+'\n'
+            mess += '#host#'+ctx.host+'\n'
+            mess += '#port#'+str(ctx.port)+'\n'
             mess += query
+            ctx.queryFeedback[qID] = {'file':'', 'no':nbe,'query':'...', 'treated' : False, 'p':0.0, 'r':0.0, 'inGap':True, 'empty':False, 'duration': 0.0 }
             before = now()
             res = sp.query(mess)
             after = now()
             ctx.lastProcessing = after - before
+            inGap = True
+            empty = False
             # print('(%d)'%nbe,':',rep)
             if res == []:
                 print('(%d, %s sec.)' % (nbe, ctx.lastProcessing.total_seconds()), "Empty query !!!")
                 client = SocketClient(host = ctx.sweep_ip, port = ctx.sweep_port, ClientMsgProcessor = MsgProcessor() )
                 data={'path': 'inform' ,'data': mess, 'errtype': 'Empty', 'no': no}
                 client.sendMsg2(data)
+                empty = True
             else:
-                # ,res)
-                print('(%d, %s sec.)' %
-                      (nbe, ctx.lastProcessing.total_seconds()), ': [...]')
+                print('(%d, %s sec.)' % (nbe, ctx.lastProcessing.total_seconds()), ': [...]')
             if ctx.lastProcessing > ctx.gap:
-                print('(%d, %s sec.)' % (nbe, ctx.lastProcessing.total_seconds()),
-                      '!!!!!!!!! hors Gap (%s) !!!!!!!!!' % ctx.gap.total_seconds())
-
+                print('(%d, %s sec.)' % (nbe, ctx.lastProcessing.total_seconds()), '!!!!!!!!! hors Gap (%s) !!!!!!!!!' % ctx.gap.total_seconds())
+                inGap = False
+            with ctx.lck :
+                d = ctx.queryFeedback[qID]
+                d['duration'] = ctx.lastProcessing.total_seconds()
+                d['inGap'] = inGap
+                d['empty'] = empty
+                ctx.queryFeedback[qID] = d
         except TPFClientError as e:
             print('(%d)' % nbe, 'Exception TPFClientError : %s' % e.__str__())
             if doPR:
@@ -355,7 +426,11 @@ def treat(query, bgp_list, ip, datasource):
         print('Exception', e)
         res = 'Error:'+e.__str__()
     finally:
+        print('QueryFeedback:')
+        for (id,t) in ctx.queryFeedback.items() :
+            print('\t * ',id,':',t)
         return res
+
 
 
 def loadDatabases(configFile, atpfServer, atpfClient) :
@@ -415,15 +490,16 @@ if __name__ == '__main__':
     ato = float(qsimCfg['TimeOut'])
     ahost = qsimCfg['LocalIP']
     aport = qsimCfg['QSIM']
+    abackport = qsimCfg['BackPort']
 
     sweepCfg = cfg['SWEEP']
     asweep = sweepCfg['LocalIP']
     ctx.ports = { 'DataCollector' : int(sweepCfg['DataCollector']), 'QueryCollector' : int(sweepCfg['QueryCollector']), 'DashboardEntry' : int(sweepCfg['DashboardEntry']) }
     ctx.sweep_host = sweepCfg['LocalIP']
+    ctx.port = int(abackport)
+    ctx.host = ahost
 
     ctx.setSWEEPServer(ctx.sweep_host,ctx.ports['QueryCollector'])
-    # http://localhost:5000/lift : serveur TPF LIFT (exemple du papier)
-    # http://localhost:5001/dbpedia_3_9 server dppedia si : ssh -L 5001:172.16.9.3:5001 desmontils@172.16.9.15
     ctx.gap = dt.timedelta(minutes=agap)
 
     loadDatabases('config.xml', atpfServer, atpfClient)
@@ -432,14 +508,72 @@ if __name__ == '__main__':
         ctx.doPR = True
     try:
         print('Running qsim-WS on ', ahost+':'+aport)
+        ctx.start()
         app.run(
             host=ahost,
             port=int(aport),
-            debug=True
+            debug=False
         )
     except KeyboardInterrupt:
+        # On attend d'avoir tous les résultats
         pass
     finally:
         # ctx.qm.stop()
-        pass
-    print('Fin')
+
+        all = False
+        while not all:
+            all = True
+            for (id,t) in ctx.queryFeedback.items() :
+                if not(t['treated']) : 
+                    all = False
+                    time.sleep(3)
+                    break;
+
+        print('\n\n To conclude :')
+
+
+        ctx.stop()
+        print('Process data :')
+        nb = 0
+        sump = 0
+        sumr = 0
+        pbGap = 0
+        sumT = 0
+        for (id,t) in ctx.queryFeedback.items() :
+            print('\t * ',id,':',t)
+            nb +=1
+            sump += t['p']
+            sumr += t['r']
+            sumT += t['duration']
+            if t['inGap']: pbGap += 1
+        print('Process stat :')
+        print('\t - Queries out of gap: ',pbGap)
+        if nb>0 :
+            print('\t - Avg processing: ',sumT/nb)
+            print('\t - nb queries : ',nb)
+            print('\t - Avg p : ', sump/nb)
+            print('\t - Avg r : ',sumr/nb)
+        else: print('\t no queries treated')
+
+        sweep = SocketClient(host=ctx.sweep_ip, port=ctx.ports['DashboardEntry'], msgSize = 2048, ClientMsgProcessor = MsgProcessor() )
+        res = sweep.sendMsg( { 'path' : '/run'} )
+        nb = res[2]
+        if nb>0:
+            avgPrecision = res[3]/nb
+            avgRecall = res[4]/nb
+        else:
+            avgPrecision = 0
+            avgRecall = 0
+        if (res[6]+res[0])>0:
+            gn = res[5]/(res[6]+res[0])
+        else: gn = 0
+        print('server stat :')
+        print('\t - Nb Queries :', nb)
+        print('\t - Nb BGP : ', res[7])
+        print('\t - Nb TPQ : ', res[9])
+        print('\t - Avg p : ',avgPrecision)
+        print('\t - Avg r : ',avgRecall)
+        print('\t - GN : ',gn)
+
+        print('The End!')
+
